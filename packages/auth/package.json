@@ -1,0 +1,24 @@
+{
+  "name": "@reluxury/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@reluxury/db": "workspace:*",
+    "@reluxury/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@reluxury/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}
