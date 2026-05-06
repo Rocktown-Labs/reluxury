@@ -15,19 +15,11 @@ function CartComponent() {
   const { cartItems } = Route.useLoaderData();
   const router = useRouter();
 
-  const subtotal = cartItems.reduce(
-    (
-      sum: number,
-      item: {
-        product: { salePrice: number | null; price: number };
-        quantity: number;
-      }
-    ) => {
-      const price = item.product.salePrice ?? item.product.price;
-      return sum + price * item.quantity;
-    },
-    0
-  );
+  let subtotal = 0;
+  for (const item of cartItems) {
+    const price = item.product.salePrice ?? item.product.price;
+    subtotal += price * item.quantity;
+  }
 
   const handleUpdateQuantity = async (itemId: string, quantity: number) => {
     try {

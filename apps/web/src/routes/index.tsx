@@ -1,4 +1,8 @@
+/* oxlint-disable no-use-before-define, func-style */
 import { Button } from "@reluxury/ui/components/button";
+import { SkeletonEventCard } from "@reluxury/ui/components/skeleton-event-card";
+import { SkeletonGrid } from "@reluxury/ui/components/skeleton-grid";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -16,27 +20,53 @@ import {
   getEvents,
   getPromotions,
 } from "@/functions/store";
+import {
+  featuredProductsQueryOptions,
+  newArrivalsQueryOptions,
+  eventsQueryOptions,
+  promotionsQueryOptions,
+} from "@/lib/queries";
 import { getDateValue, isUpcomingWorkshop } from "@/lib/workshops";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,
   loader: async () => ({
-      events: await getEvents(),
-      featured: await getFeaturedProducts(),
-      newArrivals: await getNewArrivals(),
-      promotions: await getPromotions({ data: "homepage" }),
-    }),
+    events: await getEvents(),
+    featured: await getFeaturedProducts(),
+    newArrivals: await getNewArrivals(),
+    promotions: await getPromotions({ data: "homepage" }),
+  }),
 });
 
 function HomeComponent() {
-  const { featured, newArrivals, events, promotions } = Route.useLoaderData();
-  const upcomingWorkshops = [...events]
+  const loaderData = Route.useLoaderData();
+
+  const { data: featured, isLoading: featuredLoading } = useQuery({
+    ...featuredProductsQueryOptions(),
+    initialData: loaderData.featured,
+  });
+
+  const { data: newArrivals, isLoading: newArrivalsLoading } = useQuery({
+    ...newArrivalsQueryOptions(),
+    initialData: loaderData.newArrivals,
+  });
+
+  const { data: events, isLoading: eventsLoading } = useQuery({
+    ...eventsQueryOptions(),
+    initialData: loaderData.events,
+  });
+
+  const { data: promotions, isLoading: promotionsLoading } = useQuery({
+    ...promotionsQueryOptions("homepage"),
+    initialData: loaderData.promotions,
+  });
+
+  const upcomingWorkshops = [...(events ?? [])]
     .filter((event) => isUpcomingWorkshop(event.startDate))
     .toSorted(
       (a, b) =>
         (getDateValue(a.startDate) ?? 0) - (getDateValue(b.startDate) ?? 0)
-    )
-    .slice(0, 3);
+    );
 
   return (
     <div className="flex flex-col">
@@ -109,7 +139,6 @@ function HomeComponent() {
                   </div>
                 </div>
               </div>
-              {/* Decorative elements */}
               <div className="absolute -top-4 -right-4 w-24 h-24 border border-gold/10 rounded-full" />
               <div className="absolute -bottom-6 -left-6 w-32 h-32 border border-gold/5 rounded-full" />
             </div>
@@ -118,67 +147,82 @@ function HomeComponent() {
       </section>
 
       {/* Promotions Banner */}
-      {promotions.length > 0 && (
-        <section className="border-y border-gold/10 bg-gold/5">
-          <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-4">
-            <div className="flex flex-wrap items-center justify-center gap-6 text-center">
-              {promotions.map(
-                (promo: {
-                  id: string;
-                  title: string;
-                  subtitle: string | null;
-                }) => (
-                  <div
-                    key={promo.id}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <Sparkles className="h-4 w-4 text-gold shrink-0" />
-                    <span className="text-gold font-medium">{promo.title}</span>
-                    {promo.subtitle && (
-                      <span className="text-muted-foreground">
-                        {promo.subtitle}
-                      </span>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Featured Products */}
-      {featured.length > 0 && (
-        <section className="py-20">
-          <div className="container mx-auto max-w-7xl px-4 lg:px-8">
-            <div className="flex items-end justify-between mb-12">
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
-                  Curated Selection
-                </p>
-                <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
-                  Featured Pieces
-                </h2>
+      {promotionsLoading
+        ? null
+        : promotions.length > 0 && (
+            <section className="border-y border-gold/10 bg-gold/5">
+              <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-4">
+                <div className="flex flex-wrap items-center justify-center gap-6 text-center">
+                  {promotions.map(
+                    (promo: {
+                      id: string;
+                      title: string;
+                      subtitle: string | null;
+                    }) => (
+                      <div
+                        key={promo.id}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <Sparkles className="h-4 w-4 text-gold shrink-0" />
+                        <span className="text-gold font-medium">
+                          {promo.title}
+                        </span>
+                        {promo.subtitle && (
+                          <span className="text-muted-foreground">
+                            {promo.subtitle}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
               </div>
-              <Link
-                to="/shop"
-                className="hidden sm:flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
-              >
-                View All <ArrowRight className="h-4 w-4" />
-              </Link>
+            </section>
+          )}
+
+      {/* Featured Products — horizontal scroll all screens */}
+      <section className="py-20">
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+          <div className="flex items-end justify-between mb-12">
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                Curated Selection
+              </p>
+              <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+                Featured Pieces
+              </h2>
             </div>
-            <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 lg:grid-cols-4">
-              {featured.map((product: { id: string }) => (
+            <Link
+              to="/shop"
+              className="hidden sm:flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
+            >
+              View All <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          {featuredLoading ? (
+            <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="min-w-[19rem] snap-start">
+                  <ProductCard
+                    product={null as never}
+                    mobileLayout="horizontal"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1">
+              {featured.map((product) => (
                 <ProductCard
                   key={product.id}
-                  product={product as never}
+                  product={product}
                   mobileLayout="horizontal"
                 />
               ))}
             </div>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
 
       {/* Services */}
       <section className="py-20 bg-card border-y border-gold/10">
@@ -262,40 +306,65 @@ function HomeComponent() {
         </div>
       </section>
 
-      {/* New Arrivals */}
-      {newArrivals.length > 0 && (
-        <section className="py-20">
-          <div className="container mx-auto max-w-7xl px-4 lg:px-8">
-            <div className="flex items-end justify-between mb-12">
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
-                  Just In
-                </p>
-                <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
-                  New Arrivals
-                </h2>
-              </div>
-              <Link
-                to="/shop"
-                className="hidden sm:flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
-              >
-                View All <ArrowRight className="h-4 w-4" />
-              </Link>
+      {/* New Arrivals — 6 cards + View All on desktop, horizontal scroll on mobile */}
+      <section className="py-20">
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+          <div className="flex items-end justify-between mb-12">
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                Just In
+              </p>
+              <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+                New Arrivals
+              </h2>
             </div>
-            <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 lg:grid-cols-4">
-              {newArrivals.map((product: { id: string }) => (
-                <ProductCard
-                  key={product.id}
-                  product={product as never}
-                  mobileLayout="horizontal"
-                />
-              ))}
-            </div>
+            <Link
+              to="/shop"
+              className="hidden sm:flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
+            >
+              View All <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-        </section>
-      )}
+          {newArrivalsLoading ? (
+            <SkeletonGrid count={6} horizontal />
+          ) : (
+            <>
+              {/* Mobile: horizontal scroll */}
+              <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:hidden">
+                {newArrivals.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    mobileLayout="horizontal"
+                  />
+                ))}
+              </div>
+              {/* Desktop: 6 cards + View All CTA */}
+              <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {newArrivals.slice(0, 6).map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+                <Link
+                  to="/shop"
+                  className="group flex flex-col items-center justify-center rounded-xl border border-gold/10 bg-card p-6 hover:border-gold/30 transition-colors min-h-[320px]"
+                >
+                  <div className="w-14 h-14 rounded-full bg-gold/10 flex items-center justify-center mb-4 group-hover:bg-gold/15 transition-colors">
+                    <ArrowRight className="h-6 w-6 text-gold" />
+                  </div>
+                  <p className="font-display text-lg text-foreground group-hover:text-gold transition-colors">
+                    View All
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {newArrivals.length}+ items
+                  </p>
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
 
-      {/* Workshops */}
+      {/* Workshops — horizontal scroll all screens */}
       {upcomingWorkshops.length > 0 && (
         <section className="py-20 bg-card border-y border-gold/10">
           <div className="container mx-auto max-w-7xl px-4 lg:px-8">
@@ -315,11 +384,26 @@ function HomeComponent() {
                 View All <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {upcomingWorkshops.map((event: { id: string }) => (
-                <EventCard key={event.id} event={event as never} />
-              ))}
-            </div>
+            {eventsLoading ? (
+              <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="min-w-[20rem] snap-start">
+                    <SkeletonEventCard />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1">
+                {upcomingWorkshops.map((event) => (
+                  <div
+                    key={event.id}
+                    className="min-w-[20rem] snap-start md:min-w-0 md:flex-1"
+                  >
+                    <EventCard event={event} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}

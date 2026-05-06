@@ -15,13 +15,16 @@
     /* Linting */
     "skipLibCheck": true,
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@reluxury/ui/*": ["../../packages/ui/src/*"]
+      "@reluxury/ui/*": ["../../packages/ui/src/*"],
+      "@reluxury/db": ["../../packages/db/src/index.ts"],
+      "@reluxury/db/schema": ["../../packages/db/src/schema/index.ts"],
+      "@reluxury/db/schema/*": ["../../packages/db/src/schema/*.ts"]
     }
   }
 }

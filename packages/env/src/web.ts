@@ -1,9 +1,8 @@
 import { createEnv } from "@t3-oss/env-core";
-import { z } from "zod";
-
 export const env = createEnv({
-  clientPrefix: "VITE_",
   client: {},
-  runtimeEnv: (import.meta as any).env,
+  clientPrefix: "VITE_",
   emptyStringAsUndefined: true,
+  // oxlint-disable-next-line typescript/no-explicit-any
+  runtimeEnv: (import.meta as any).env,
 });

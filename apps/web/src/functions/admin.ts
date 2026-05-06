@@ -1,0 +1,619 @@
+import { createDb } from "@reluxury/db";
+import {
+  products,
+  productImages,
+  orders,
+  events,
+  alterationBookings,
+  promotions,
+} from "@reluxury/db/schema";
+import { env } from "@reluxury/env/server";
+import { createServerFn } from "@tanstack/react-start";
+import { eq, desc, count, sql } from "drizzle-orm";
+import { z } from "zod";
+
+import { authMiddleware } from "@/middleware/auth";
+
+function requireAdmin(context: {
+  session: { user: { role?: string | null } } | null;
+}) {
+  if (!context.session || context.session.user.role !== "admin") {
+    throw new Error("Unauthorized: Admin access required");
+  }
+}
+
+const IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function decodeBase64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.codePointAt(i);
+  }
+  return bytes;
+}
+
+function toSafeFileName(name: string): string {
+  return name.toLowerCase().replaceAll(/[^a-z0-9.\-_]/g, "-");
+}
+
+// Products Admin
+export const adminGetProducts = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.products.findMany({
+      orderBy: [desc(products.createdAt)],
+      with: {
+        category: true,
+        images: {
+          limit: 1,
+          orderBy: [productImages.sortOrder],
+        },
+      },
+    });
+  });
+
+export const adminCreateProduct = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      brand: z.string().optional(),
+      categoryId: z.string().optional(),
+      colors: z.array(z.string()).optional(),
+      condition: z.enum(["new", "like_new", "excellent", "good", "fair"]),
+      description: z.string().optional(),
+      featured: z.boolean().default(false),
+      gender: z.enum(["women", "men", "unisex"]),
+      imageUrls: z.array(z.string()).optional(),
+      isActive: z.boolean().default(true),
+      material: z.string().optional(),
+      price: z.number(),
+      quantity: z.number().default(1),
+      salePrice: z.number().optional(),
+      sizes: z.array(z.string()).optional(),
+      sku: z.string().optional(),
+      slug: z.string(),
+      tags: z.array(z.string()).optional(),
+      title: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const id = crypto.randomUUID();
+
+    await db.insert(products).values({
+      brand: data.brand,
+      categoryId: data.categoryId,
+      colors: data.colors ? JSON.stringify(data.colors) : null,
+      condition: data.condition,
+      description: data.description,
+      featured: data.featured,
+      gender: data.gender,
+      id,
+      isActive: data.isActive,
+      material: data.material,
+      price: data.price,
+      quantity: data.quantity,
+      salePrice: data.salePrice,
+      sizes: data.sizes ? JSON.stringify(data.sizes) : null,
+      sku: data.sku,
+      slug: data.slug,
+      tags: data.tags ? JSON.stringify(data.tags) : null,
+      title: data.title,
+    });
+
+    if (data.imageUrls && data.imageUrls.length > 0) {
+      for (let i = 0; i < data.imageUrls.length; i += 1) {
+        await db.insert(productImages).values({
+          id: crypto.randomUUID(),
+          isPrimary: i === 0,
+          productId: id,
+          sortOrder: i,
+          url: data.imageUrls[i],
+        });
+      }
+    }
+
+    return { id };
+  });
+
+export const adminUpdateProduct = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      brand: z.string().optional().nullable(),
+      categoryId: z.string().optional().nullable(),
+      colors: z.array(z.string()).optional(),
+      condition: z
+        .enum(["new", "like_new", "excellent", "good", "fair"])
+        .optional(),
+      description: z.string().optional().nullable(),
+      featured: z.boolean().optional(),
+      gender: z.enum(["women", "men", "unisex"]).optional(),
+      id: z.string(),
+      isActive: z.boolean().optional(),
+      material: z.string().optional().nullable(),
+      price: z.number().optional(),
+      quantity: z.number().optional(),
+      salePrice: z.number().optional().nullable(),
+      sizes: z.array(z.string()).optional(),
+      sku: z.string().optional().nullable(),
+      tags: z.array(z.string()).optional(),
+      title: z.string().optional(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const { id, ...updateData } = data;
+
+    const update: Record<string, unknown> = {};
+    if (updateData.title !== undefined) {
+      update.title = updateData.title;
+    }
+    if (updateData.description !== undefined) {
+      update.description = updateData.description;
+    }
+    if (updateData.price !== undefined) {
+      update.price = updateData.price;
+    }
+    if (updateData.salePrice !== undefined) {
+      update.salePrice = updateData.salePrice;
+    }
+    if (updateData.categoryId !== undefined) {
+      update.categoryId = updateData.categoryId;
+    }
+    if (updateData.brand !== undefined) {
+      update.brand = updateData.brand;
+    }
+    if (updateData.condition !== undefined) {
+      update.condition = updateData.condition;
+    }
+    if (updateData.gender !== undefined) {
+      update.gender = updateData.gender;
+    }
+    if (updateData.sizes !== undefined) {
+      update.sizes = JSON.stringify(updateData.sizes);
+    }
+    if (updateData.colors !== undefined) {
+      update.colors = JSON.stringify(updateData.colors);
+    }
+    if (updateData.material !== undefined) {
+      update.material = updateData.material;
+    }
+    if (updateData.quantity !== undefined) {
+      update.quantity = updateData.quantity;
+    }
+    if (updateData.sku !== undefined) {
+      update.sku = updateData.sku;
+    }
+    if (updateData.featured !== undefined) {
+      update.featured = updateData.featured;
+    }
+    if (updateData.isActive !== undefined) {
+      update.isActive = updateData.isActive;
+    }
+    if (updateData.tags !== undefined) {
+      update.tags = JSON.stringify(updateData.tags);
+    }
+
+    await db.update(products).set(update).where(eq(products.id, id));
+    return { success: true };
+  });
+
+export const adminDeleteProduct = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db.delete(productImages).where(eq(productImages.productId, id));
+    await db.delete(products).where(eq(products.id, id));
+    return { success: true };
+  });
+
+export const adminUploadProductImage = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      base64: z.string().min(1),
+      contentType: z.string().min(1),
+      fileName: z.string().min(1),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+
+    if (!IMAGE_MIME_TYPES.has(data.contentType)) {
+      throw new Error("Unsupported image format");
+    }
+
+    const bytes = decodeBase64ToBytes(data.base64);
+    if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+      throw new Error("Image exceeds 10MB upload limit");
+    }
+
+    const r2 = env.PRODUCT_IMAGES;
+    const publicBase = env.PRODUCT_IMAGES_PUBLIC_URL;
+
+    if (!r2 || !publicBase) {
+      const dataUrl = `data:${data.contentType};base64,${data.base64}`;
+      return { url: dataUrl };
+    }
+
+    const extension = data.fileName.split(".").pop()?.toLowerCase();
+    const key = `products/${Date.now()}-${crypto.randomUUID()}-${toSafeFileName(extension ? data.fileName : `${data.fileName}.jpg`)}`;
+
+    await r2.put(key, bytes, {
+      httpMetadata: {
+        contentType: data.contentType,
+      },
+    });
+
+    return {
+      key,
+      url: `${publicBase.replace(/\/+$/, "")}/${key}`,
+    };
+  });
+
+export const adminDeleteProductImage = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const image = await db.query.productImages.findFirst({
+      where: eq(productImages.id, id),
+    });
+    if (!image) {
+      throw new Error("Image not found");
+    }
+    if (image.url.startsWith("data:")) {
+      await db.delete(productImages).where(eq(productImages.id, id));
+      return { success: true };
+    }
+    const r2 = env.PRODUCT_IMAGES;
+    if (r2) {
+      try {
+        const url = new URL(image.url);
+        const key = url.pathname.slice(1);
+        await r2.delete(key);
+      } catch {
+        // ignore R2 delete errors
+      }
+    }
+    await db.delete(productImages).where(eq(productImages.id, id));
+    return { success: true };
+  });
+
+export const adminSetPrimaryImage = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      imageId: z.string(),
+      productId: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db
+      .update(productImages)
+      .set({ isPrimary: false })
+      .where(eq(productImages.productId, data.productId));
+    await db
+      .update(productImages)
+      .set({ isPrimary: true })
+      .where(eq(productImages.id, data.imageId));
+    return { success: true };
+  });
+
+export const adminAddProductImages = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      productId: z.string(),
+      urls: z.array(z.string()),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const existingCount = await db
+      .select({ count: count() })
+      .from(productImages)
+      .where(eq(productImages.productId, data.productId));
+    const startIndex = existingCount[0]?.count ?? 0;
+
+    for (let i = 0; i < data.urls.length; i += 1) {
+      await db.insert(productImages).values({
+        id: crypto.randomUUID(),
+        isPrimary: startIndex === 0 && i === 0,
+        productId: data.productId,
+        sortOrder: startIndex + i,
+        url: data.urls[i],
+      });
+    }
+    return { success: true };
+  });
+
+// Orders Admin
+export const adminGetOrders = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.orders.findMany({
+      orderBy: [desc(orders.createdAt)],
+      with: {
+        items: true,
+        user: true,
+      },
+    });
+  });
+
+export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      adminNotes: z.string().optional(),
+      id: z.string(),
+      status: z.enum([
+        "pending",
+        "confirmed",
+        "preparing",
+        "ready_for_pickup",
+        "shipped",
+        "completed",
+        "cancelled",
+      ]),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db
+      .update(orders)
+      .set({ adminNotes: data.adminNotes ?? undefined, status: data.status })
+      .where(eq(orders.id, data.id));
+    return { success: true };
+  });
+
+// Events Admin
+export const adminGetEvents = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.events.findMany({
+      orderBy: [desc(events.startDate)],
+      with: {
+        registrations: {
+          with: {
+            user: true,
+          },
+        },
+      },
+    });
+  });
+
+export const adminCreateEvent = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      capacity: z.number().optional(),
+      description: z.string().optional(),
+      endDate: z.string().datetime().optional(),
+      imageUrl: z.string().optional(),
+      instructor: z.string().optional(),
+      location: z.string().optional(),
+      price: z.number().default(0),
+      slug: z.string(),
+      startDate: z.string().datetime(),
+      title: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const id = crypto.randomUUID();
+    await db.insert(events).values({
+      id,
+      ...data,
+      endDate: data.endDate ? new Date(data.endDate) : null,
+      isActive: true,
+    });
+    return { id };
+  });
+
+export const adminUpdateEvent = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      capacity: z.number().optional().nullable(),
+      description: z.string().optional().nullable(),
+      endDate: z.string().datetime().optional().nullable(),
+      id: z.string(),
+      imageUrl: z.string().optional().nullable(),
+      instructor: z.string().optional().nullable(),
+      isActive: z.boolean().optional(),
+      location: z.string().optional().nullable(),
+      price: z.number().optional(),
+      startDate: z.string().datetime().optional(),
+      title: z.string().optional(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const { id, ...update } = data;
+    await db.update(events).set(update).where(eq(events.id, id));
+    return { success: true };
+  });
+
+export const adminDeleteEvent = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db.delete(events).where(eq(events.id, id));
+    return { success: true };
+  });
+
+// Alterations Admin
+export const adminGetAlterations = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.alterationBookings.findMany({
+      orderBy: [desc(alterationBookings.createdAt)],
+      with: {
+        user: true,
+      },
+    });
+  });
+
+export const adminUpdateAlteration = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      adminNotes: z.string().optional().nullable(),
+      id: z.string(),
+      price: z.number().optional().nullable(),
+      status: z
+        .enum(["pending", "approved", "in_progress", "completed", "cancelled"])
+        .optional(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const { id, ...update } = data;
+    await db
+      .update(alterationBookings)
+      .set(update)
+      .where(eq(alterationBookings.id, id));
+    return { success: true };
+  });
+
+// Promotions Admin
+export const adminGetPromotions = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.select().from(promotions).orderBy(desc(promotions.createdAt));
+  });
+
+export const adminCreatePromotion = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      buttonLink: z.string().optional(),
+      buttonText: z.string().optional(),
+      description: z.string().optional(),
+      displayLocation: z.enum(["homepage", "shop", "both"]).default("both"),
+      imageUrl: z.string().optional(),
+      sortOrder: z.number().default(0),
+      subtitle: z.string().optional(),
+      title: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const id = crypto.randomUUID();
+    await db.insert(promotions).values({ id, ...data, isActive: true });
+    return { id };
+  });
+
+export const adminUpdatePromotion = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      buttonLink: z.string().optional().nullable(),
+      buttonText: z.string().optional().nullable(),
+      description: z.string().optional().nullable(),
+      displayLocation: z.enum(["homepage", "shop", "both"]).optional(),
+      id: z.string(),
+      imageUrl: z.string().optional().nullable(),
+      isActive: z.boolean().optional(),
+      sortOrder: z.number().optional(),
+      subtitle: z.string().optional().nullable(),
+      title: z.string().optional(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const { id, ...update } = data;
+    await db.update(promotions).set(update).where(eq(promotions.id, id));
+    return { success: true };
+  });
+
+export const adminDeletePromotion = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db.delete(promotions).where(eq(promotions.id, id));
+    return { success: true };
+  });
+
+// Stats
+export const adminGetStats = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+
+    const [
+      orderCount,
+      totalRevenue,
+      productCount,
+      eventCount,
+      pendingOrders,
+      pendingAlterations,
+    ] = await Promise.all([
+      db.select({ count: count() }).from(orders),
+      db
+        .select({ total: sql<number>`sum(${orders.total})` })
+        .from(orders)
+        .where(eq(orders.status, "completed")),
+      db.select({ count: count() }).from(products),
+      db
+        .select({ count: count() })
+        .from(events)
+        .where(eq(events.isActive, true)),
+      db
+        .select({ count: count() })
+        .from(orders)
+        .where(eq(orders.status, "pending")),
+      db
+        .select({ count: count() })
+        .from(alterationBookings)
+        .where(eq(alterationBookings.status, "pending")),
+    ]);
+
+    return {
+      activeEvents: eventCount[0]?.count ?? 0,
+      pendingAlterations: pendingAlterations[0]?.count ?? 0,
+      pendingOrders: pendingOrders[0]?.count ?? 0,
+      totalOrders: orderCount[0]?.count ?? 0,
+      totalProducts: productCount[0]?.count ?? 0,
+      totalRevenue: totalRevenue[0]?.total ?? 0,
+    };
+  });

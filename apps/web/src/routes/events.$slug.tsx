@@ -1,12 +1,11 @@
+import { Button } from "@reluxury/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Calendar, MapPin, Users, ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@reluxury/ui/components/button";
-
-import { getEventBySlug } from "@/functions/store";
 import { registerForEvent } from "@/functions/events";
+import { getEventBySlug } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
 import { isUpcomingWorkshop } from "@/lib/workshops";
 
@@ -26,7 +25,9 @@ function EventDetailComponent() {
   if (!event) {
     return (
       <div className="container mx-auto max-w-7xl px-4 py-20 text-center">
-        <h1 className="font-display text-2xl text-foreground mb-4">Workshop Not Found</h1>
+        <h1 className="font-display text-2xl text-foreground mb-4">
+          Workshop Not Found
+        </h1>
         <Link to="/events">
           <Button variant="outline" className="border-gold/20 text-gold">
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -40,6 +41,15 @@ function EventDetailComponent() {
   const startDate = event.startDate ? new Date(event.startDate) : null;
   const endDate = event.endDate ? new Date(event.endDate) : null;
   const isUpcoming = isUpcomingWorkshop(event.startDate);
+
+  let registerButtonText: string;
+  if (isRegistering) {
+    registerButtonText = "Registering...";
+  } else if (session) {
+    registerButtonText = "Register Now";
+  } else {
+    registerButtonText = "Sign In to Register";
+  }
 
   const handleRegister = async () => {
     if (!session) {
@@ -59,7 +69,10 @@ function EventDetailComponent() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 lg:px-8 py-8">
-      <Link to="/events" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-gold transition-colors mb-8">
+      <Link
+        to="/events"
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-gold transition-colors mb-8"
+      >
         <ArrowLeft className="h-4 w-4" />
         Back to Workshops
       </Link>
@@ -72,7 +85,9 @@ function EventDetailComponent() {
               Upcoming Workshop
             </span>
           )}
-          <h1 className="font-display text-4xl font-light text-foreground">{event.title}</h1>
+          <h1 className="font-display text-4xl font-light text-foreground">
+            {event.title}
+          </h1>
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
             {startDate && (
               <div className="flex items-center gap-1.5">
@@ -84,11 +99,12 @@ function EventDetailComponent() {
                     weekday: "long",
                     year: "numeric",
                   })}
-                  {endDate && ` - ${endDate.toLocaleDateString("en-US", {
-                    day: "numeric",
-                    month: "long",
-                    weekday: "long",
-                  })}`}
+                  {endDate &&
+                    ` - ${endDate.toLocaleDateString("en-US", {
+                      day: "numeric",
+                      month: "long",
+                      weekday: "long",
+                    })}`}
                 </span>
               </div>
             )}
@@ -110,7 +126,11 @@ function EventDetailComponent() {
         {/* Image */}
         {event.imageUrl && (
           <div className="aspect-video rounded-xl overflow-hidden border border-gold/10">
-            <img src={event.imageUrl} alt={event.title} className="h-full w-full object-cover" />
+            <img
+              src={event.imageUrl}
+              alt={event.title}
+              className="h-full w-full object-cover"
+            />
           </div>
         )}
 
@@ -118,7 +138,9 @@ function EventDetailComponent() {
         <div className="grid md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-6">
             <div>
-              <h2 className="font-display text-xl text-foreground mb-3">About This Workshop</h2>
+              <h2 className="font-display text-xl text-foreground mb-3">
+                About This Workshop
+              </h2>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
                 {event.description}
               </p>
@@ -126,7 +148,9 @@ function EventDetailComponent() {
 
             {event.instructor && (
               <div>
-                <h2 className="font-display text-xl text-foreground mb-3">Instructor</h2>
+                <h2 className="font-display text-xl text-foreground mb-3">
+                  Instructor
+                </h2>
                 <p className="text-muted-foreground">{event.instructor}</p>
               </div>
             )}
@@ -141,23 +165,23 @@ function EventDetailComponent() {
                   {event.price > 0 ? `$${event.price.toFixed(2)}` : "Free"}
                 </span>
               </div>
-              
+
               {isUpcoming ? (
                 <Button
                   className="w-full bg-gold text-primary-foreground hover:bg-gold-dark"
                   disabled={isRegistering}
                   onClick={handleRegister}
                 >
-                  {isRegistering ? "Registering..." : (session ? "Register Now" : "Sign In to Register")}
+                  {registerButtonText}
                 </Button>
               ) : (
                 <Button disabled className="w-full" variant="outline">
                   Workshop Has Passed
                 </Button>
               )}
-              
+
               <p className="text-xs text-muted-foreground text-center">
-               Registration is required to attend.
+                Registration is required to attend.
               </p>
             </div>
 
@@ -166,7 +190,9 @@ function EventDetailComponent() {
               {startDate && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Date</span>
-                  <span className="text-foreground">{startDate.toLocaleDateString()}</span>
+                  <span className="text-foreground">
+                    {startDate.toLocaleDateString()}
+                  </span>
                 </div>
               )}
               {event.location && (
@@ -178,7 +204,9 @@ function EventDetailComponent() {
               {event.capacity && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Capacity</span>
-                  <span className="text-foreground">{event.capacity} people</span>
+                  <span className="text-foreground">
+                    {event.capacity} people
+                  </span>
                 </div>
               )}
             </div>

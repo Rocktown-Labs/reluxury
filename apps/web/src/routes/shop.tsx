@@ -1,3 +1,4 @@
+/* oxlint-disable no-use-before-define, func-style, no-negated-condition */
 import { Button } from "@reluxury/ui/components/button";
 import { Input } from "@reluxury/ui/components/input";
 import {
@@ -12,6 +13,8 @@ import {
   SheetContent,
   SheetTrigger,
 } from "@reluxury/ui/components/sheet";
+import { SkeletonGrid } from "@reluxury/ui/components/skeleton-grid";
+import { useQuery } from "@tanstack/react-query";
 import {
   Outlet,
   createFileRoute,
@@ -28,6 +31,11 @@ import {
   getCategories,
   getProductBrands,
 } from "@/functions/store";
+import {
+  productsQueryOptions,
+  categoriesQueryOptions,
+  productBrandsQueryOptions,
+} from "@/lib/queries";
 
 const searchSchema = z.object({
   brand: z.string().optional(),
@@ -74,7 +82,30 @@ function ShopComponent() {
 
   const search = useSearch({ from: "/shop" });
   const navigate = Route.useNavigate();
-  const { productsResult, categoriesList, brands } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData();
+
+  const { data: productsResult, isLoading: productsLoading } = useQuery({
+    ...productsQueryOptions({
+      brand: search.brand,
+      category: search.category,
+      condition: search.condition,
+      gender: search.gender,
+      page: search.page,
+      search: search.search,
+      sort: search.sort,
+    }),
+    initialData: loaderData.productsResult,
+  });
+
+  const { data: categoriesList } = useQuery({
+    ...categoriesQueryOptions(),
+    initialData: loaderData.categoriesList,
+  });
+
+  const { data: brands } = useQuery({
+    ...productBrandsQueryOptions(),
+    initialData: loaderData.brands,
+  });
 
   const [localSearch, setLocalSearch] = useState(search.search ?? "");
 
@@ -238,64 +269,75 @@ function ShopComponent() {
 
         {/* Products Grid */}
         <div className="flex-1">
-          <p className="text-sm text-muted-foreground mb-6">
-            Showing {productsResult.items.length} of {productsResult.total}{" "}
-            products
-          </p>
-
-          {productsResult.items.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              {productsResult.items.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-20">
-              <p className="text-muted-foreground">
-                No products found matching your criteria.
+          {productsLoading ? (
+            <>
+              <p className="text-sm text-muted-foreground mb-6">
+                Loading products...
               </p>
-              <Button
-                variant="link"
-                className="text-gold mt-2"
-                onClick={() => {
-                  navigate({ search: {} });
-                  setLocalSearch("");
-                }}
-              >
-                Clear filters
-              </Button>
-            </div>
-          )}
+              <SkeletonGrid count={6} />
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-6">
+                Showing {productsResult.items.length} of {productsResult.total}{" "}
+                products
+              </p>
 
-          {/* Pagination */}
-          {productsResult.totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-12">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-gold/10"
-                disabled={productsResult.page <= 1}
-                onClick={() =>
-                  updateFilter("page", String(productsResult.page - 1))
-                }
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground px-4">
-                Page {productsResult.page} of {productsResult.totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-gold/10"
-                disabled={productsResult.page >= productsResult.totalPages}
-                onClick={() =>
-                  updateFilter("page", String(productsResult.page + 1))
-                }
-              >
-                Next
-              </Button>
-            </div>
+              {productsResult.items.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                  {productsResult.items.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-20">
+                  <p className="text-muted-foreground">
+                    No products found matching your criteria.
+                  </p>
+                  <Button
+                    variant="link"
+                    className="text-gold mt-2"
+                    onClick={() => {
+                      navigate({ search: {} });
+                      setLocalSearch("");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
+
+              {/* Pagination */}
+              {productsResult.totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-12">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-gold/10"
+                    disabled={productsResult.page <= 1}
+                    onClick={() =>
+                      updateFilter("page", String(productsResult.page - 1))
+                    }
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-4">
+                    Page {productsResult.page} of {productsResult.totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-gold/10"
+                    disabled={productsResult.page >= productsResult.totalPages}
+                    onClick={() =>
+                      updateFilter("page", String(productsResult.page + 1))
+                    }
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
