@@ -1,34 +1,388 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Button } from "@reluxury/ui/components/button";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  ArrowRight,
+  Sparkles,
+  Scissors,
+  Calendar,
+  ShoppingBag,
+} from "lucide-react";
+
+import EventCard from "@/components/event-card";
+import ProductCard from "@/components/product-card";
+import {
+  getFeaturedProducts,
+  getNewArrivals,
+  getEvents,
+  getPromotions,
+} from "@/functions/store";
+import { getDateValue, isUpcomingWorkshop } from "@/lib/workshops";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,
+  loader: async () => ({
+      events: await getEvents(),
+      featured: await getFeaturedProducts(),
+      newArrivals: await getNewArrivals(),
+      promotions: await getPromotions({ data: "homepage" }),
+    }),
 });
 
-const TITLE_TEXT = `
- ██████╗ ███████╗████████╗████████╗███████╗██████╗
- ██╔══██╗██╔════╝╚══██╔══╝╚══██╔══╝██╔════╝██╔══██╗
- ██████╔╝█████╗     ██║      ██║   █████╗  ██████╔╝
- ██╔══██╗██╔══╝     ██║      ██║   ██╔══╝  ██╔══██╗
- ██████╔╝███████╗   ██║      ██║   ███████╗██║  ██║
- ╚═════╝ ╚══════╝   ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝
-
- ████████╗    ███████╗████████╗ █████╗  ██████╗██╗  ██╗
- ╚══██╔══╝    ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
-    ██║       ███████╗   ██║   ███████║██║     █████╔╝
-    ██║       ╚════██║   ██║   ██╔══██║██║     ██╔═██╗
-    ██║       ███████║   ██║   ██║  ██║╚██████╗██║  ██╗
-    ╚═╝       ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
- `;
-
 function HomeComponent() {
+  const { featured, newArrivals, events, promotions } = Route.useLoaderData();
+  const upcomingWorkshops = [...events]
+    .filter((event) => isUpcomingWorkshop(event.startDate))
+    .toSorted(
+      (a, b) =>
+        (getDateValue(a.startDate) ?? 0) - (getDateValue(b.startDate) ?? 0)
+    )
+    .slice(0, 3);
+
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-2">
-      <pre className="overflow-x-auto font-mono text-sm">{TITLE_TEXT}</pre>
-      <div className="grid gap-6">
-        <section className="rounded-lg border p-4">
-          <h2 className="mb-2 font-medium">API Status</h2>
+    <div className="flex flex-col">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-card">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--gold)_0%,_transparent_50%)] opacity-[0.07]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--gold)_0%,_transparent_50%)] opacity-[0.05]" />
+
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-20 lg:py-32 relative">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+              <div className="inline-flex items-center gap-2 rounded-full border border-gold/20 bg-gold/5 px-4 py-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-gold" />
+                <span className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                  Est. 2025
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                <h1 className="font-display text-5xl lg:text-7xl font-light leading-[1.1] tracking-tight">
+                  <span className="text-foreground">Elevated</span>
+                  <br />
+                  <span className="gold-text-gradient font-medium">Resale</span>
+                  <br />
+                  <span className="text-foreground">& Alterations</span>
+                </h1>
+                <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
+                  Curated consignment boutique offering pre-loved luxury fashion
+                  and expert tailoring services in the heart of Maumelle.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <Link to="/shop">
+                  <Button
+                    size="lg"
+                    className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2 px-8"
+                  >
+                    <ShoppingBag className="h-4 w-4" />
+                    Shop Now
+                  </Button>
+                </Link>
+                <Link to="/events">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-gold/20 text-gold hover:bg-gold/10 gap-2 px-8"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    View Workshops
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="relative hidden lg:block">
+              <div className="relative aspect-[4/5] rounded-2xl overflow-hidden border border-gold/10">
+                <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent z-10" />
+                <div className="absolute inset-0 flex items-center justify-center bg-card">
+                  <div className="text-center space-y-4 p-12">
+                    <div className="w-24 h-24 mx-auto rounded-full border-2 border-gold/30 flex items-center justify-center">
+                      <span className="font-display text-4xl text-gold">R</span>
+                    </div>
+                    <p className="font-display text-2xl text-gold tracking-[0.2em]">
+                      ReLUXURY
+                    </p>
+                    <p className="text-sm text-muted-foreground uppercase tracking-[0.3em]">
+                      Consignment Boutique
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {/* Decorative elements */}
+              <div className="absolute -top-4 -right-4 w-24 h-24 border border-gold/10 rounded-full" />
+              <div className="absolute -bottom-6 -left-6 w-32 h-32 border border-gold/5 rounded-full" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Promotions Banner */}
+      {promotions.length > 0 && (
+        <section className="border-y border-gold/10 bg-gold/5">
+          <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-4">
+            <div className="flex flex-wrap items-center justify-center gap-6 text-center">
+              {promotions.map(
+                (promo: {
+                  id: string;
+                  title: string;
+                  subtitle: string | null;
+                }) => (
+                  <div
+                    key={promo.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Sparkles className="h-4 w-4 text-gold shrink-0" />
+                    <span className="text-gold font-medium">{promo.title}</span>
+                    {promo.subtitle && (
+                      <span className="text-muted-foreground">
+                        {promo.subtitle}
+                      </span>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
         </section>
-      </div>
+      )}
+
+      {/* Featured Products */}
+      {featured.length > 0 && (
+        <section className="py-20">
+          <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+            <div className="flex items-end justify-between mb-12">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                  Curated Selection
+                </p>
+                <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+                  Featured Pieces
+                </h2>
+              </div>
+              <Link
+                to="/shop"
+                className="hidden sm:flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
+              >
+                View All <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 lg:grid-cols-4">
+              {featured.map((product: { id: string }) => (
+                <ProductCard
+                  key={product.id}
+                  product={product as never}
+                  mobileLayout="horizontal"
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Services */}
+      <section className="py-20 bg-card border-y border-gold/10">
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+          <div className="text-center mb-16 space-y-3">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+              What We Offer
+            </p>
+            <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+              Our Services
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="group p-8 rounded-xl border border-gold/10 hover:border-gold/20 transition-colors text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-full bg-gold/10 flex items-center justify-center group-hover:bg-gold/15 transition-colors">
+                <ShoppingBag className="h-6 w-6 text-gold" />
+              </div>
+              <h3 className="font-display text-xl text-foreground">
+                Consignment
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Shop curated pre-loved luxury fashion. Every piece is
+                authenticated and quality-checked for your confidence.
+              </p>
+            </div>
+            <div className="group p-8 rounded-xl border border-gold/10 hover:border-gold/20 transition-colors text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-full bg-gold/10 flex items-center justify-center group-hover:bg-gold/15 transition-colors">
+                <Scissors className="h-6 w-6 text-gold" />
+              </div>
+              <h3 className="font-display text-xl text-foreground">
+                Alterations
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Expert tailoring and alterations to make every garment fit you
+                perfectly. From hems to complete restyling.
+              </p>
+            </div>
+            <div className="group p-8 rounded-xl border border-gold/10 hover:border-gold/20 transition-colors text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-full bg-gold/10 flex items-center justify-center group-hover:bg-gold/15 transition-colors">
+                <Calendar className="h-6 w-6 text-gold" />
+              </div>
+              <h3 className="font-display text-xl text-foreground">
+                Workshops
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Join our sewing classes and fashion workshops. Learn new skills
+                and connect with our creative community.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-10">
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+          <div className="rounded-2xl border border-gold/20 bg-card/80 p-6 sm:p-8">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                  Tailoring Services
+                </p>
+                <h3 className="font-display text-2xl text-foreground">
+                  Need Alterations After You Shop?
+                </h3>
+                <p className="max-w-2xl text-sm text-muted-foreground">
+                  From hems to complete restyling, our in-house tailoring keeps
+                  every piece fitting perfectly after purchase.
+                </p>
+              </div>
+              <Link to="/alterations">
+                <Button
+                  variant="outline"
+                  className="border-gold/20 text-gold hover:bg-gold/10 gap-2"
+                >
+                  <Scissors className="h-4 w-4" />
+                  Book Alteration Service
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* New Arrivals */}
+      {newArrivals.length > 0 && (
+        <section className="py-20">
+          <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+            <div className="flex items-end justify-between mb-12">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                  Just In
+                </p>
+                <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+                  New Arrivals
+                </h2>
+              </div>
+              <Link
+                to="/shop"
+                className="hidden sm:flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
+              >
+                View All <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 lg:grid-cols-4">
+              {newArrivals.map((product: { id: string }) => (
+                <ProductCard
+                  key={product.id}
+                  product={product as never}
+                  mobileLayout="horizontal"
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Workshops */}
+      {upcomingWorkshops.length > 0 && (
+        <section className="py-20 bg-card border-y border-gold/10">
+          <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+            <div className="flex items-end justify-between mb-12">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                  Coming Up
+                </p>
+                <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+                  Upcoming Workshops
+                </h2>
+              </div>
+              <Link
+                to="/events"
+                className="hidden sm:flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
+              >
+                View All <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {upcomingWorkshops.map((event: { id: string }) => (
+                <EventCard key={event.id} event={event as never} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Visit Us */}
+      <section className="py-20">
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                  Visit Our Boutique
+                </p>
+                <h2 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+                  Experience ReLUXURY
+                </h2>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Step into our thoughtfully curated space where luxury meets
+                sustainability. Browse our latest arrivals, discuss alterations
+                with our experts, or simply enjoy the ambiance of elevated
+                resale.
+              </p>
+              <div className="space-y-4 pt-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center shrink-0">
+                    <Calendar className="h-4 w-4 text-gold" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Store Hours</p>
+                    <p className="text-sm text-muted-foreground">
+                      Tuesday – Friday: 10:00 AM – 6:00 PM
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Saturday: 10:00 AM – 5:00 PM
+                    </p>
+                    <p className="text-sm text-muted-foreground/60">
+                      Sunday & Monday: Closed
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="aspect-video rounded-xl border border-gold/10 bg-card flex items-center justify-center">
+                <div className="text-center space-y-3">
+                  <p className="font-display text-2xl text-gold">
+                    14217 Corvallis Rd, Ste F
+                  </p>
+                  <p className="text-muted-foreground">Maumelle, AR 72113</p>
+                  <a
+                    href="tel:5014048696"
+                    className="text-gold hover:text-gold-light transition-colors"
+                  >
+                    (501) 404-8696
+                  </a>
+                </div>
+              </div>
+              <div className="absolute -bottom-4 -right-4 w-24 h-24 border border-gold/10 rounded-full -z-10" />
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
