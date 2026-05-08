@@ -2,7 +2,7 @@
 import { Badge } from "@reluxury/ui/components/badge";
 import { Button } from "@reluxury/ui/components/button";
 import { Skeleton } from "@reluxury/ui/components/skeleton";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ShoppingBag, Scissors, ArrowLeft } from "lucide-react";
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { addToCart } from "@/functions/cart";
 import { getProductBySlug } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
+import { addToGuestCart } from "@/lib/guest-cart";
 import { productBySlugQueryOptions } from "@/lib/queries";
 
 export const Route = createFileRoute("/shop/$slug")({
@@ -29,6 +30,7 @@ function ProductDetailComponent() {
   });
 
   const { data: session } = authClient.useSession();
+  const queryClient = useQueryClient();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -92,23 +94,28 @@ function ProductDetailComponent() {
   }
 
   const handleAddToCart = async () => {
-    if (!session) {
-      toast.error("Please sign in to add items to your cart");
-      return;
-    }
     if (sizes.length > 0 && !selectedSize) {
       toast.error("Please select a size");
       return;
     }
     setIsAdding(true);
     try {
-      await addToCart({
-        data: {
+      if (session) {
+        await addToCart({
+          data: {
+            productId: product.id,
+            quantity,
+            size: selectedSize,
+          },
+        });
+        await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+      } else {
+        addToGuestCart({
           productId: product.id,
           quantity,
           size: selectedSize,
-        },
-      });
+        });
+      }
       toast.success("Added to cart");
     } catch {
       toast.error("Failed to add to cart");
@@ -119,6 +126,16 @@ function ProductDetailComponent() {
 
   return (
     <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-8">
+      {/* Back */}
+      <button
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-gold transition-colors mb-4"
+        onClick={() => window.history.back()}
+        type="button"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
         <Link to="/shop" className="hover:text-gold transition-colors">

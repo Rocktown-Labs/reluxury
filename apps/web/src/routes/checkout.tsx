@@ -7,22 +7,18 @@ import {
   RadioGroupItem,
 } from "@reluxury/ui/components/radio-group";
 import { Separator } from "@reluxury/ui/components/separator";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, MapPin, Truck, CreditCard } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { getCart } from "@/functions/cart";
 import { createOrder } from "@/functions/orders";
+import { getProductsByIds } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
+import { getGuestCart, clearGuestCart } from "@/lib/guest-cart";
 
 export const Route = createFileRoute("/checkout")({
-  beforeLoad: async () => {
-    const session = await authClient.getSession();
-    if (!session) {
-      throw redirect({ to: "/login" });
-    }
-  },
   component: CheckoutComponent,
   loader: async () => {
     const cartItems = await getCart();
@@ -30,13 +26,27 @@ export const Route = createFileRoute("/checkout")({
   },
 });
 
+interface CheckoutItem {
+  id: string;
+  product: {
+    title: string;
+    images: { url: string }[];
+    salePrice: number | null;
+    price: number;
+  };
+  quantity: number;
+}
+
 function CheckoutComponent() {
-  const { cartItems } = Route.useLoaderData();
-  const navigate = Route.useNavigate();
+  const { cartItems: serverCartItems } = Route.useLoaderData();
+  const { data: session } = authClient.useSession();
+
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "shipping">(
     "pickup"
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderComplete, setOrderComplete] = useState(false);
+  const [orderNumber, setOrderNumber] = useState("");
   const [formData, setFormData] = useState({
     address: "",
     city: "",
@@ -47,19 +57,60 @@ function CheckoutComponent() {
     zip: "",
   });
 
-  const subtotal = cartItems.reduce(
-    (
-      sum: number,
-      item: {
-        product: { salePrice: number | null; price: number };
-        quantity: number;
+  const [guestItems, setGuestItems] = useState<CheckoutItem[]>([]);
+  const [isLoadingGuest, setIsLoadingGuest] = useState(true);
+
+  useEffect(() => {
+    if (session) {
+      setGuestItems([]);
+      setIsLoadingGuest(false);
+      return;
+    }
+
+    const raw = getGuestCart();
+    if (raw.length === 0) {
+      setGuestItems([]);
+      setIsLoadingGuest(false);
+      return;
+    }
+
+    const ids = raw.map((item) => item.productId);
+    (async () => {
+      try {
+        const products = await getProductsByIds({ data: ids });
+        const merged: CheckoutItem[] = [];
+        for (const item of raw) {
+          const product = products.find((p) => p.id === item.productId);
+          if (!product) {
+            continue;
+          }
+          merged.push({
+            id: `${item.productId}-${item.size ?? "no-size"}`,
+            product: {
+              images: product.images ?? [],
+              price: product.price,
+              salePrice: product.salePrice,
+              title: product.title,
+            },
+            quantity: item.quantity,
+          });
+        }
+        setGuestItems(merged);
+      } catch {
+        toast.error("Failed to load cart");
+      } finally {
+        setIsLoadingGuest(false);
       }
-    ) => {
-      const price = item.product.salePrice ?? item.product.price;
-      return sum + price * item.quantity;
-    },
-    0
-  );
+    })();
+  }, [session]);
+
+  const cartItems = session ? serverCartItems : guestItems;
+
+  let subtotal = 0;
+  for (const item of cartItems) {
+    const price = item.product.salePrice ?? item.product.price;
+    subtotal += price * item.quantity;
+  }
 
   const shippingCost = deliveryMethod === "shipping" ? 9.99 : 0;
   const total = subtotal + shippingCost;
@@ -79,23 +130,102 @@ function CheckoutComponent() {
 
     setIsSubmitting(true);
     try {
-      await createOrder({
-        data: {
-          deliveryMethod,
-          email: formData.email,
-          name: formData.name,
-          phone: formData.phone || undefined,
-          shippingAddress: deliveryMethod === "shipping" ? formData : undefined,
-        },
-      });
-      toast.success("Order placed successfully!");
-      navigate({ to: "/dashboard" });
+      const payload: {
+        deliveryMethod: "pickup" | "shipping";
+        email: string;
+        name: string;
+        phone?: string;
+        shippingAddress?: {
+          address: string;
+          city: string;
+          email: string;
+          name: string;
+          phone?: string;
+          state: string;
+          zip: string;
+        };
+        guestItems?: {
+          productId: string;
+          quantity: number;
+          size: string | null;
+        }[];
+      } = {
+        deliveryMethod,
+        email: formData.email,
+        name: formData.name,
+        phone: formData.phone || undefined,
+        shippingAddress:
+          deliveryMethod === "shipping"
+            ? {
+                address: formData.address,
+                city: formData.city,
+                email: formData.email,
+                name: formData.name,
+                phone: formData.phone || undefined,
+                state: formData.state,
+                zip: formData.zip,
+              }
+            : undefined,
+      };
+
+      if (!session) {
+        payload.guestItems = getGuestCart().map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          size: item.size,
+        }));
+      }
+
+      const result = await createOrder({ data: payload });
+      setOrderNumber(result.orderNumber);
+      setOrderComplete(true);
+
+      if (!session) {
+        clearGuestCart();
+      }
     } catch {
       toast.error("Failed to place order");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (orderComplete) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 py-20 text-center">
+        <div className="max-w-md mx-auto space-y-6">
+          <div className="w-20 h-20 mx-auto rounded-full bg-gold/10 flex items-center justify-center">
+            <span className="font-display text-3xl text-gold">R</span>
+          </div>
+          <div className="space-y-2">
+            <h1 className="font-display text-2xl text-foreground">
+              Order Confirmed
+            </h1>
+            <p className="text-muted-foreground">
+              Thank you for your order! We will send you an email confirmation
+              shortly.
+            </p>
+            <p className="text-sm text-gold font-medium">
+              Order #{orderNumber}
+            </p>
+          </div>
+          <Link to="/shop">
+            <Button className="bg-gold text-primary-foreground hover:bg-gold-dark">
+              Continue Shopping
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session && isLoadingGuest) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-8">
+        <p className="text-muted-foreground">Loading cart...</p>
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (

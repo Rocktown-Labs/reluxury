@@ -1,45 +1,83 @@
 import { createDb } from "@reluxury/db";
 import { orders, orderItems, cartItems, products } from "@reluxury/db/schema";
 import { createServerFn } from "@tanstack/react-start";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 
 import { authMiddleware } from "@/middleware/auth";
 
-export const createOrder = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      deliveryMethod: z.enum(["pickup", "shipping"]),
+const orderInputSchema = z.object({
+  deliveryMethod: z.enum(["pickup", "shipping"]),
+  email: z.string(),
+  guestItems: z
+    .array(
+      z.object({
+        productId: z.string(),
+        quantity: z.number().min(1),
+        size: z.string().nullable().optional(),
+      })
+    )
+    .optional(),
+  name: z.string(),
+  phone: z.string().optional(),
+  shippingAddress: z
+    .object({
+      address: z.string(),
+      city: z.string(),
       email: z.string(),
       name: z.string(),
       phone: z.string().optional(),
-      shippingAddress: z
-        .object({
-          address: z.string(),
-          city: z.string(),
-          email: z.string(),
-          name: z.string(),
-          phone: z.string().optional(),
-          state: z.string(),
-          zip: z.string(),
-        })
-        .optional(),
+      state: z.string(),
+      zip: z.string(),
     })
-  )
+    .optional(),
+});
+
+export const createOrder = createServerFn({ method: "POST" })
+  .inputValidator(orderInputSchema)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    if (!context.session) {
-      throw new Error("Unauthorized");
-    }
     const db = createDb();
-    const userId = context.session.user.id;
+    const userId = context.session?.user.id ?? null;
 
-    const cart = await db.query.cartItems.findMany({
-      where: eq(cartItems.userId, userId),
-      with: {
-        product: true,
-      },
-    });
+    // Build cart items
+    let cart: {
+      productId: string;
+      quantity: number;
+      size: string | null;
+      product: typeof products.$inferSelect;
+    }[] = [];
+
+    if (userId) {
+      const dbCart = await db.query.cartItems.findMany({
+        where: eq(cartItems.userId, userId),
+        with: { product: true },
+      });
+      cart = dbCart.map((item) => ({
+        product: item.product,
+        productId: item.productId,
+        quantity: item.quantity,
+        size: item.size,
+      }));
+    } else if (data.guestItems && data.guestItems.length > 0) {
+      for (const guestItem of data.guestItems) {
+        const product = await db.query.products.findFirst({
+          where: and(
+            eq(products.id, guestItem.productId),
+            eq(products.isActive, true)
+          ),
+        });
+        if (!product) {
+          continue;
+        }
+        cart.push({
+          product,
+          productId: guestItem.productId,
+          quantity: guestItem.quantity,
+          size: guestItem.size ?? null,
+        });
+      }
+    }
 
     if (cart.length === 0) {
       throw new Error("Cart is empty");
@@ -93,7 +131,10 @@ export const createOrder = createServerFn({ method: "POST" })
         .where(eq(products.id, item.productId));
     }
 
-    await db.delete(cartItems).where(eq(cartItems.userId, userId));
+    // Clear DB cart for logged-in users
+    if (userId) {
+      await db.delete(cartItems).where(eq(cartItems.userId, userId));
+    }
 
     return { orderId, orderNumber };
   });

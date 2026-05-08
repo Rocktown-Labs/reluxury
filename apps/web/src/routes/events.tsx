@@ -19,11 +19,11 @@ function EventsComponent() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const { events } = Route.useLoaderData();
+
   if (pathname !== "/events" && pathname !== "/events/") {
     return <Outlet />;
   }
-
-  const { events } = Route.useLoaderData();
   const sortedEvents = [...events].toSorted((a, b) => {
     const aDate = getDateValue(a.startDate) ?? 0;
     const bDate = getDateValue(b.startDate) ?? 0;

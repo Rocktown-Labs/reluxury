@@ -2,18 +2,94 @@ import { Button } from "@reluxury/ui/components/button";
 import { Separator } from "@reluxury/ui/components/separator";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Trash2, Minus, Plus, ShoppingBag, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { getCart, updateCartItem, removeFromCart } from "@/functions/cart";
+import { getProductsByIds } from "@/functions/store";
+import { authClient } from "@/lib/auth-client";
+import {
+  getGuestCart,
+  updateGuestCartItem,
+  removeFromGuestCart,
+} from "@/lib/guest-cart";
 
 export const Route = createFileRoute("/cart")({
   component: CartComponent,
   loader: async () => ({ cartItems: await getCart() }),
 });
 
+interface CartItemDisplay {
+  id: string;
+  productId: string;
+  product: {
+    title: string;
+    slug: string;
+    images: { url: string }[];
+    salePrice: number | null;
+    price: number;
+  };
+  quantity: number;
+  size: string | null;
+}
+
 function CartComponent() {
-  const { cartItems } = Route.useLoaderData();
+  const { cartItems: serverCartItems } = Route.useLoaderData();
   const router = useRouter();
+  const { data: session } = authClient.useSession();
+
+  const [guestItems, setGuestItems] = useState<CartItemDisplay[]>([]);
+  const [isLoadingGuest, setIsLoadingGuest] = useState(true);
+
+  // Load guest cart products when not authenticated
+  useEffect(() => {
+    if (session) {
+      setGuestItems([]);
+      setIsLoadingGuest(false);
+      return;
+    }
+
+    const raw = getGuestCart();
+    if (raw.length === 0) {
+      setGuestItems([]);
+      setIsLoadingGuest(false);
+      return;
+    }
+
+    const ids = raw.map((item) => item.productId);
+    (async () => {
+      try {
+        const products = await getProductsByIds({ data: ids });
+        const merged: CartItemDisplay[] = [];
+        for (const item of raw) {
+          const product = products.find((p) => p.id === item.productId);
+          if (!product) {
+            continue;
+          }
+          merged.push({
+            id: `${item.productId}-${item.size ?? "no-size"}`,
+            product: {
+              images: product.images ?? [],
+              price: product.price,
+              salePrice: product.salePrice,
+              slug: product.slug,
+              title: product.title,
+            },
+            productId: item.productId,
+            quantity: item.quantity,
+            size: item.size,
+          });
+        }
+        setGuestItems(merged);
+      } catch {
+        toast.error("Failed to load cart");
+      } finally {
+        setIsLoadingGuest(false);
+      }
+    })();
+  }, [session]);
+
+  const cartItems = session ? serverCartItems : guestItems;
 
   let subtotal = 0;
   for (const item of cartItems) {
@@ -21,24 +97,59 @@ function CartComponent() {
     subtotal += price * item.quantity;
   }
 
-  const handleUpdateQuantity = async (itemId: string, quantity: number) => {
-    try {
-      await updateCartItem({ data: { itemId, quantity } });
-      await router.invalidate();
-    } catch {
-      toast.error("Failed to update quantity");
+  const handleUpdateQuantity = async (
+    itemId: string,
+    quantity: number,
+    productId?: string,
+    size?: string | null
+  ) => {
+    if (quantity < 1) {
+      return;
+    }
+    if (session) {
+      try {
+        await updateCartItem({ data: { itemId, quantity } });
+        await router.invalidate();
+      } catch {
+        toast.error("Failed to update quantity");
+      }
+    } else if (productId) {
+      updateGuestCartItem(productId, size ?? null, quantity);
+      setGuestItems((prev) =>
+        prev.map((item) => (item.id === itemId ? { ...item, quantity } : item))
+      );
     }
   };
 
-  const handleRemove = async (itemId: string) => {
-    try {
-      await removeFromCart({ data: itemId });
-      await router.invalidate();
-      toast.success("Item removed");
-    } catch {
-      toast.error("Failed to remove item");
+  const handleRemove = async (
+    itemId: string,
+    productId?: string,
+    size?: string | null
+  ) => {
+    if (session) {
+      try {
+        await removeFromCart({ data: itemId });
+        await router.invalidate();
+        toast.success("Item removed");
+      } catch {
+        toast.error("Failed to remove item");
+      }
+    } else if (productId) {
+      removeFromGuestCart(productId, size ?? null);
+      setGuestItems((prev) => prev.filter((item) => item.id !== itemId));
     }
   };
+
+  if (!session && isLoadingGuest) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-8">
+        <h1 className="font-display text-3xl font-light text-foreground mb-8">
+          Shopping Cart
+        </h1>
+        <p className="text-muted-foreground">Loading cart...</p>
+      </div>
+    );
+  }
 
   if (cartItems.length === 0) {
     return (
@@ -74,97 +185,100 @@ function CartComponent() {
       <div className="grid lg:grid-cols-3 gap-12">
         {/* Cart Items */}
         <div className="lg:col-span-2 space-y-6">
-          {cartItems.map(
-            (item: {
-              id: string;
-              product: {
-                title: string;
-                slug: string;
-                images: { url: string }[];
-                salePrice: number | null;
-                price: number;
-              };
-              quantity: number;
-              size: string | null;
-            }) => {
-              const price = item.product.salePrice ?? item.product.price;
-              return (
-                <div
-                  key={item.id}
-                  className="flex gap-4 p-4 rounded-xl border border-gold/10 bg-card"
-                >
-                  <div className="w-24 h-24 rounded-lg overflow-hidden shrink-0 bg-muted">
-                    {item.product.images[0] ? (
-                      <img
-                        src={item.product.images[0].url}
-                        alt={item.product.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center">
-                        <span className="font-display text-xl text-gold/20">
-                          R
-                        </span>
-                      </div>
-                    )}
+          {cartItems.map((item) => {
+            const price = item.product.salePrice ?? item.product.price;
+            return (
+              <div
+                key={item.id}
+                className="flex gap-4 p-4 rounded-xl border border-gold/10 bg-card"
+              >
+                <div className="w-24 h-24 rounded-lg overflow-hidden shrink-0 bg-muted">
+                  {item.product.images[0] ? (
+                    <img
+                      src={item.product.images[0].url}
+                      alt={item.product.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <span className="font-display text-xl text-gold/20">
+                        R
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <Link
+                        to="/shop/$slug"
+                        params={{ slug: item.product.slug }}
+                      >
+                        <h3 className="font-medium text-foreground hover:text-gold transition-colors line-clamp-1">
+                          {item.product.title}
+                        </h3>
+                      </Link>
+                      {item.size && (
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          Size: {item.size}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() =>
+                        handleRemove(
+                          item.id,
+                          session ? undefined : item.productId,
+                          item.size
+                        )
+                      }
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Link
-                          to="/shop/$slug"
-                          params={{ slug: item.product.slug }}
-                        >
-                          <h3 className="font-medium text-foreground hover:text-gold transition-colors line-clamp-1">
-                            {item.product.title}
-                          </h3>
-                        </Link>
-                        {item.size && (
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            Size: {item.size}
-                          </p>
-                        )}
-                      </div>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleRemove(item.id)}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        className="w-8 h-8 rounded-md border border-gold/10 flex items-center justify-center text-muted-foreground hover:border-gold/30 transition-colors"
+                        onClick={() =>
+                          handleUpdateQuantity(
+                            item.id,
+                            item.quantity - 1,
+                            session ? undefined : item.productId,
+                            item.size
+                          )
+                        }
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="w-8 text-center text-sm font-medium">
+                        {item.quantity}
+                      </span>
+                      <button
+                        className="w-8 h-8 rounded-md border border-gold/10 flex items-center justify-center text-muted-foreground hover:border-gold/30 transition-colors"
+                        onClick={() =>
+                          handleUpdateQuantity(
+                            item.id,
+                            item.quantity + 1,
+                            session ? undefined : item.productId,
+                            item.size
+                          )
+                        }
+                      >
+                        <Plus className="h-3 w-3" />
                       </button>
                     </div>
-
-                    <div className="flex items-center justify-between mt-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="w-8 h-8 rounded-md border border-gold/10 flex items-center justify-center text-muted-foreground hover:border-gold/30 transition-colors"
-                          onClick={() =>
-                            handleUpdateQuantity(item.id, item.quantity - 1)
-                          }
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="w-8 text-center text-sm font-medium">
-                          {item.quantity}
-                        </span>
-                        <button
-                          className="w-8 h-8 rounded-md border border-gold/10 flex items-center justify-center text-muted-foreground hover:border-gold/30 transition-colors"
-                          onClick={() =>
-                            handleUpdateQuantity(item.id, item.quantity + 1)
-                          }
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
-                      <p className="font-semibold text-gold">
-                        ${(price * item.quantity).toFixed(2)}
-                      </p>
-                    </div>
+                    <p className="font-semibold text-gold">
+                      ${(price * item.quantity).toFixed(2)}
+                    </p>
                   </div>
                 </div>
-              );
-            }
-          )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Summary */}

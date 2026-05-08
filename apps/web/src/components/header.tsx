@@ -1,12 +1,18 @@
+import { Badge } from "@reluxury/ui/components/badge";
 import { Button } from "@reluxury/ui/components/button";
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
 } from "@reluxury/ui/components/sheet";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Menu, Crown } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { getCart } from "@/functions/cart";
+import { authClient } from "@/lib/auth-client";
+import { getGuestCartCount } from "@/lib/guest-cart";
 
 import UserMenu from "./user-menu";
 
@@ -20,6 +26,37 @@ const NAV_LINKS = [
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: session } = authClient.useSession();
+  const [guestCount, setGuestCount] = useState(0);
+
+  const { data: serverCart } = useQuery({
+    enabled: !!session,
+    queryFn: () => getCart(),
+    queryKey: ["cart-count"],
+  });
+
+  useEffect(() => {
+    if (session) {
+      setGuestCount(0);
+      return;
+    }
+    const update = () => setGuestCount(getGuestCartCount());
+    update();
+    window.addEventListener("focus", update);
+    window.addEventListener("reluxury-cart-changed", update);
+    return () => {
+      window.removeEventListener("focus", update);
+      window.removeEventListener("reluxury-cart-changed", update);
+    };
+  }, [session]);
+
+  let serverCount = 0;
+  if (serverCart) {
+    for (const item of serverCart) {
+      serverCount += item.quantity;
+    }
+  }
+  const cartCount = session ? serverCount : guestCount;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gold/10 bg-background/80 backdrop-blur-md">
@@ -100,6 +137,11 @@ export default function Header() {
             >
               <ShoppingBag className="h-5 w-5" />
               <span className="sr-only">Cart</span>
+              {cartCount > 0 && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px] bg-gold text-primary-foreground border-0">
+                  {cartCount > 99 ? "99+" : cartCount}
+                </Badge>
+              )}
             </Button>
           </Link>
           <UserMenu />

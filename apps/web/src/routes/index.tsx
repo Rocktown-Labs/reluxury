@@ -75,72 +75,59 @@ function HomeComponent() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--gold)_0%,_transparent_50%)] opacity-[0.07]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--gold)_0%,_transparent_50%)] opacity-[0.05]" />
 
-        <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-20 lg:py-32 relative">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
-              <div className="inline-flex items-center gap-2 rounded-full border border-gold/20 bg-gold/5 px-4 py-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-gold" />
-                <span className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
-                  Est. 2025
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-20 lg:py-28 relative">
+          <div className="max-w-3xl mx-auto text-center space-y-10">
+            <div className="space-y-6">
+              <h1 className="font-display text-5xl lg:text-7xl font-light leading-[1.1] tracking-tight">
+                <span className="text-foreground">Where Luxury Finds</span>
+                <br />
+                <span className="gold-text-gradient font-medium">
+                  Its Second Life
                 </span>
-              </div>
+              </h1>
 
-              <div className="space-y-4">
-                <h1 className="font-display text-5xl lg:text-7xl font-light leading-[1.1] tracking-tight">
-                  <span className="text-foreground">Elevated</span>
-                  <br />
-                  <span className="gold-text-gradient font-medium">Resale</span>
-                  <br />
-                  <span className="text-foreground">& Alterations</span>
-                </h1>
-                <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
-                  Curated consignment boutique offering pre-loved luxury fashion
-                  and expert tailoring services in the heart of Maumelle.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-4">
-                <Link to="/shop">
-                  <Button
-                    size="lg"
-                    className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2 px-8"
-                  >
-                    <ShoppingBag className="h-4 w-4" />
-                    Shop Now
-                  </Button>
-                </Link>
-                <Link to="/events">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="border-gold/20 text-gold hover:bg-gold/10 gap-2 px-8"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    View Workshops
-                  </Button>
-                </Link>
-              </div>
+              <p className="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
+                Curated pre-loved fashion, expert alterations, and hands-on
+                sewing workshops — all under one roof.
+              </p>
             </div>
 
-            <div className="relative hidden lg:block">
-              <div className="relative aspect-[4/5] rounded-2xl overflow-hidden border border-gold/10">
-                <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent z-10" />
-                <div className="absolute inset-0 flex items-center justify-center bg-card">
-                  <div className="text-center space-y-4 p-12">
-                    <div className="w-24 h-24 mx-auto rounded-full border-2 border-gold/30 flex items-center justify-center">
-                      <span className="font-display text-4xl text-gold">R</span>
-                    </div>
-                    <p className="font-display text-2xl text-gold tracking-[0.2em]">
-                      ReLUXURY
-                    </p>
-                    <p className="text-sm text-muted-foreground uppercase tracking-[0.3em]">
-                      Consignment Boutique
-                    </p>
-                  </div>
-                </div>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <Link to="/shop">
+                <Button
+                  size="lg"
+                  className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2 px-8"
+                >
+                  <ShoppingBag className="h-4 w-4" />
+                  Shop Collection
+                </Button>
+              </Link>
+              <Link to="/events">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-gold/20 text-gold hover:bg-gold/10 gap-2 px-8"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Upcoming Workshops
+                </Button>
+              </Link>
+            </div>
+
+            {/* Quick stats */}
+            <div className="flex items-center justify-center gap-8 pt-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-gold" />
+                In-Store Pickup Available
               </div>
-              <div className="absolute -top-4 -right-4 w-24 h-24 border border-gold/10 rounded-full" />
-              <div className="absolute -bottom-6 -left-6 w-32 h-32 border border-gold/5 rounded-full" />
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-gold" />
+                Expert Alterations
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-gold" />
+                Authenticated Pieces
+              </div>
             </div>
           </div>
         </div>
@@ -202,22 +189,17 @@ function HomeComponent() {
           {featuredLoading ? (
             <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="min-w-[19rem] snap-start">
-                  <ProductCard
-                    product={null as never}
-                    mobileLayout="horizontal"
-                  />
+                <div key={i} className="w-[280px] shrink-0 snap-start">
+                  <ProductCard product={null as never} />
                 </div>
               ))}
             </div>
           ) : (
             <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1">
               {featured.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  mobileLayout="horizontal"
-                />
+                <div key={product.id} className="w-[280px] shrink-0 snap-start">
+                  <ProductCard product={product} />
+                </div>
               ))}
             </div>
           )}
@@ -332,11 +314,12 @@ function HomeComponent() {
               {/* Mobile: horizontal scroll */}
               <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:hidden">
                 {newArrivals.map((product) => (
-                  <ProductCard
+                  <div
                     key={product.id}
-                    product={product}
-                    mobileLayout="horizontal"
-                  />
+                    className="w-[280px] shrink-0 snap-start"
+                  >
+                    <ProductCard product={product} />
+                  </div>
                 ))}
               </div>
               {/* Desktop: 6 cards + View All CTA */}

@@ -1,14 +1,43 @@
 import { createDb } from "@reluxury/db";
 import {
-  products,
   categories,
-  productImages,
   events,
+  productImages,
+  products,
   promotions,
 } from "@reluxury/db/schema";
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, desc, asc, like, gte, lte, sql, count } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  and,
+  asc,
+  like,
+  sql,
+  isNotNull,
+  count,
+  gte,
+  lte,
+} from "drizzle-orm";
 import { z } from "zod";
+
+export const getProductsByIds = createServerFn({ method: "POST" })
+  .inputValidator(z.array(z.string()))
+  .handler(async ({ data: ids }) => {
+    const db = createDb();
+    if (ids.length === 0) {
+      return [];
+    }
+    return db.query.products.findMany({
+      where: and(eq(products.isActive, true), sql`${products.id} IN ${ids}`),
+      with: {
+        category: true,
+        images: {
+          orderBy: [asc(productImages.sortOrder)],
+        },
+      },
+    });
+  });
 
 export const getCategories = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -27,7 +56,11 @@ export const getFeaturedProducts = createServerFn({ method: "GET" }).handler(
     return db.query.products.findMany({
       limit: 8,
       orderBy: [desc(products.createdAt)],
-      where: and(eq(products.featured, true), eq(products.isActive, true)),
+      where: and(
+        eq(products.featured, true),
+        eq(products.isActive, true),
+        isNotNull(products.categoryId)
+      ),
       with: {
         category: true,
         images: {
