@@ -22,6 +22,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShopSlugRouteImport } from './routes/shop.$slug'
 import { Route as EventsSlugRouteImport } from './routes/events.$slug'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AdminWorkshopsWorkshopIdRouteImport } from './routes/admin.workshops.$workshopId'
+import { Route as AdminOrdersOrderIdRouteImport } from './routes/admin.orders.$orderId'
+import { Route as AdminAlterationsAlterationIdRouteImport } from './routes/admin.alterations.$alterationId'
 
 const ShopRoute = ShopRouteImport.update({
   id: '/shop',
@@ -88,11 +91,28 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminWorkshopsWorkshopIdRoute =
+  AdminWorkshopsWorkshopIdRouteImport.update({
+    id: '/workshops/$workshopId',
+    path: '/workshops/$workshopId',
+    getParentRoute: () => AdminRoute,
+  } as any)
+const AdminOrdersOrderIdRoute = AdminOrdersOrderIdRouteImport.update({
+  id: '/orders/$orderId',
+  path: '/orders/$orderId',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAlterationsAlterationIdRoute =
+  AdminAlterationsAlterationIdRouteImport.update({
+    id: '/alterations/$alterationId',
+    path: '/alterations/$alterationId',
+    getParentRoute: () => AdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/alterations': typeof AlterationsRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
@@ -102,12 +122,15 @@ export interface FileRoutesByFullPath {
   '/shop': typeof ShopRouteWithChildren
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
+  '/admin/alterations/$alterationId': typeof AdminAlterationsAlterationIdRoute
+  '/admin/orders/$orderId': typeof AdminOrdersOrderIdRoute
+  '/admin/workshops/$workshopId': typeof AdminWorkshopsWorkshopIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/alterations': typeof AlterationsRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
@@ -117,13 +140,16 @@ export interface FileRoutesByTo {
   '/shop': typeof ShopRouteWithChildren
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
+  '/admin/alterations/$alterationId': typeof AdminAlterationsAlterationIdRoute
+  '/admin/orders/$orderId': typeof AdminOrdersOrderIdRoute
+  '/admin/workshops/$workshopId': typeof AdminWorkshopsWorkshopIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/alterations': typeof AlterationsRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
@@ -133,6 +159,9 @@ export interface FileRoutesById {
   '/shop': typeof ShopRouteWithChildren
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
+  '/admin/alterations/$alterationId': typeof AdminAlterationsAlterationIdRoute
+  '/admin/orders/$orderId': typeof AdminOrdersOrderIdRoute
+  '/admin/workshops/$workshopId': typeof AdminWorkshopsWorkshopIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -150,6 +179,9 @@ export interface FileRouteTypes {
     | '/shop'
     | '/events/$slug'
     | '/shop/$slug'
+    | '/admin/alterations/$alterationId'
+    | '/admin/orders/$orderId'
+    | '/admin/workshops/$workshopId'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -165,6 +197,9 @@ export interface FileRouteTypes {
     | '/shop'
     | '/events/$slug'
     | '/shop/$slug'
+    | '/admin/alterations/$alterationId'
+    | '/admin/orders/$orderId'
+    | '/admin/workshops/$workshopId'
     | '/api/auth/$'
   id:
     | '__root__'
@@ -180,13 +215,16 @@ export interface FileRouteTypes {
     | '/shop'
     | '/events/$slug'
     | '/shop/$slug'
+    | '/admin/alterations/$alterationId'
+    | '/admin/orders/$orderId'
+    | '/admin/workshops/$workshopId'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AlterationsRoute: typeof AlterationsRoute
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
@@ -290,8 +328,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/workshops/$workshopId': {
+      id: '/admin/workshops/$workshopId'
+      path: '/workshops/$workshopId'
+      fullPath: '/admin/workshops/$workshopId'
+      preLoaderRoute: typeof AdminWorkshopsWorkshopIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/orders/$orderId': {
+      id: '/admin/orders/$orderId'
+      path: '/orders/$orderId'
+      fullPath: '/admin/orders/$orderId'
+      preLoaderRoute: typeof AdminOrdersOrderIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/alterations/$alterationId': {
+      id: '/admin/alterations/$alterationId'
+      path: '/alterations/$alterationId'
+      fullPath: '/admin/alterations/$alterationId'
+      preLoaderRoute: typeof AdminAlterationsAlterationIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
+
+interface AdminRouteChildren {
+  AdminAlterationsAlterationIdRoute: typeof AdminAlterationsAlterationIdRoute
+  AdminOrdersOrderIdRoute: typeof AdminOrdersOrderIdRoute
+  AdminWorkshopsWorkshopIdRoute: typeof AdminWorkshopsWorkshopIdRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAlterationsAlterationIdRoute: AdminAlterationsAlterationIdRoute,
+  AdminOrdersOrderIdRoute: AdminOrdersOrderIdRoute,
+  AdminWorkshopsWorkshopIdRoute: AdminWorkshopsWorkshopIdRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface EventsRouteChildren {
   EventsSlugRoute: typeof EventsSlugRoute
@@ -317,7 +390,7 @@ const ShopRouteWithChildren = ShopRoute._addFileChildren(ShopRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   AlterationsRoute: AlterationsRoute,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
@@ -332,10 +405,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

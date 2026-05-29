@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { authClient } from "@/lib/auth-client";
+import { queryClient } from "@/lib/query-client";
 
 import Loader from "./loader";
 
@@ -38,6 +39,9 @@ export default function SignUpForm({
             toast.error(error.error.message || error.error.statusText);
           },
           onSuccess: () => {
+            queryClient.invalidateQueries({
+              queryKey: ["session"],
+            });
             navigate({
               to: "/dashboard",
             });

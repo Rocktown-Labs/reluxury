@@ -4,9 +4,11 @@ import { Calendar, MapPin, Users, ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { registerForEvent } from "@/functions/events";
+import { addToCart } from "@/functions/cart";
 import { getEventBySlug } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
+import { addToGuestCart } from "@/lib/guest-cart";
+import { queryClient } from "@/lib/query-client";
 import { isUpcomingWorkshop } from "@/lib/workshops";
 
 export const Route = createFileRoute("/events/$slug")({
@@ -20,7 +22,7 @@ export const Route = createFileRoute("/events/$slug")({
 function EventDetailComponent() {
   const { event } = Route.useLoaderData();
   const { data: session } = authClient.useSession();
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   if (!event) {
     return (
@@ -43,32 +45,48 @@ function EventDetailComponent() {
   const isUpcoming = isUpcomingWorkshop(event.startDate);
 
   let registerButtonText: string;
-  if (isRegistering) {
-    registerButtonText = "Registering...";
-  } else if (session) {
-    registerButtonText = "Register Now";
+  if (isAdding) {
+    registerButtonText = "Adding...";
   } else {
-    registerButtonText = "Sign In to Register";
+    registerButtonText = "Add to Cart to Register";
   }
 
-  const handleRegister = async () => {
-    if (!session) {
-      toast.error("Please sign in to register");
-      return;
-    }
-    setIsRegistering(true);
+  const handleAddToCart = async () => {
+    setIsAdding(true);
     try {
-      await registerForEvent({ data: event.id });
-      toast.success("Registered successfully!");
+      if (session) {
+        await addToCart({
+          data: {
+            productId: event.id,
+            quantity: 1,
+            size: null,
+          },
+        });
+        await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+      } else {
+        addToGuestCart({
+          productId: event.id,
+          quantity: 1,
+          size: null,
+        });
+      }
+      toast.success("Added workshop to registration cart!");
     } catch {
-      toast.error("Failed to register");
+      toast.error("Failed to add workshop to cart");
     } finally {
-      setIsRegistering(false);
+      setIsAdding(false);
     }
   };
 
+  const displayLocation = event.location
+    ? event.location
+        .replaceAll(/,\s*Maumelle/gi, "")
+        .replaceAll(/Maumelle/gi, "")
+        .trim()
+    : "";
+
   return (
-    <div className="container mx-auto max-w-4xl px-4 lg:px-8 py-8">
+    <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-8">
       <Link
         to="/events"
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-gold transition-colors mb-8"
@@ -108,10 +126,10 @@ function EventDetailComponent() {
                 </span>
               </div>
             )}
-            {event.location && (
+            {displayLocation && (
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-4 w-4 text-gold" />
-                <span>{event.location}</span>
+                <span>{displayLocation}</span>
               </div>
             )}
             {event.capacity && (
@@ -169,8 +187,8 @@ function EventDetailComponent() {
               {isUpcoming ? (
                 <Button
                   className="w-full bg-gold text-primary-foreground hover:bg-gold-dark"
-                  disabled={isRegistering}
-                  onClick={handleRegister}
+                  disabled={isAdding}
+                  onClick={handleAddToCart}
                 >
                   {registerButtonText}
                 </Button>
@@ -195,10 +213,10 @@ function EventDetailComponent() {
                   </span>
                 </div>
               )}
-              {event.location && (
+              {displayLocation && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Location</span>
-                  <span className="text-foreground">{event.location}</span>
+                  <span className="text-foreground">{displayLocation}</span>
                 </div>
               )}
               {event.capacity && (

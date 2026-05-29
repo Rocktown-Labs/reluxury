@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@reluxury/ui/components/dropdown-menu";
 import { Skeleton } from "@reluxury/ui/components/skeleton";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   User,
@@ -19,13 +20,18 @@ import {
   LogOut,
 } from "lucide-react";
 
+import { getUser } from "@/functions/get-user";
 import { authClient } from "@/lib/auth-client";
+import { queryClient } from "@/lib/query-client";
 
 export default function UserMenu() {
   const navigate = useNavigate();
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isLoading } = useQuery({
+    queryFn: () => getUser(),
+    queryKey: ["session"],
+  });
 
-  if (isPending) {
+  if (isLoading) {
     return <Skeleton className="h-9 w-24" />;
   }
 
@@ -59,21 +65,21 @@ export default function UserMenu() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-gold/10" />
 
-          <Link to="/dashboard">
+          <Link to="/dashboard" search={{ tab: "orders" }}>
             <DropdownMenuItem className="cursor-pointer gap-2">
               <Package className="h-4 w-4" />
               Dashboard
             </DropdownMenuItem>
           </Link>
 
-          <Link to="/dashboard">
+          <Link to="/dashboard" search={{ tab: "bookings" }}>
             <DropdownMenuItem className="cursor-pointer gap-2">
               <Scissors className="h-4 w-4" />
               My Alterations
             </DropdownMenuItem>
           </Link>
 
-          <Link to="/dashboard">
+          <Link to="/dashboard" search={{ tab: "events" }}>
             <DropdownMenuItem className="cursor-pointer gap-2">
               <Calendar className="h-4 w-4" />
               My Workshops
@@ -96,10 +102,14 @@ export default function UserMenu() {
           <DropdownMenuItem
             variant="destructive"
             className="cursor-pointer gap-2"
-            onClick={() => {
-              authClient.signOut({
+            onClick={async () => {
+              await authClient.signOut({
                 fetchOptions: {
                   onSuccess: () => {
+                    queryClient.setQueryData(["session"], null);
+                    queryClient.invalidateQueries({
+                      queryKey: ["session"],
+                    });
                     navigate({ to: "/" });
                   },
                 },

@@ -6,6 +6,9 @@ import {
   events,
   alterationBookings,
   promotions,
+  user,
+  storeSettings,
+  categories,
 } from "@reluxury/db/schema";
 import { env } from "@reluxury/env/server";
 import { createServerFn } from "@tanstack/react-start";
@@ -616,4 +619,178 @@ export const adminGetStats = createServerFn({ method: "GET" })
       totalProducts: productCount[0]?.count ?? 0,
       totalRevenue: totalRevenue[0]?.total ?? 0,
     };
+  });
+
+export const adminGetOrderById = createServerFn({ method: "GET" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: orderId }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.orders.findFirst({
+      where: eq(orders.id, orderId),
+      with: {
+        items: true,
+        user: true,
+      },
+    });
+  });
+
+export const adminGetAlterationById = createServerFn({ method: "GET" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.alterationBookings.findFirst({
+      where: eq(alterationBookings.id, id),
+      with: {
+        user: true,
+      },
+    });
+  });
+
+export const adminGetEventById = createServerFn({ method: "GET" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.events.findFirst({
+      where: eq(events.id, id),
+      with: {
+        registrations: {
+          with: {
+            user: true,
+          },
+        },
+      },
+    });
+  });
+
+export const adminGetCustomers = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    return db.query.user.findMany({
+      orderBy: [desc(user.createdAt)],
+      with: {
+        alterationBookings: true,
+        eventRegistrations: {
+          with: {
+            event: true,
+          },
+        },
+        orders: true,
+      },
+    });
+  });
+
+export const adminCreateAlteration = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      adminNotes: z.string().optional().nullable(),
+      itemDescription: z.string().min(1),
+      notes: z.string().optional(),
+      preferredDate: z.string().datetime(),
+      preferredTime: z.string().optional(),
+      price: z.number().optional().nullable(),
+      serviceType: z.string().min(1),
+      status: z
+        .enum(["pending", "approved", "in_progress", "completed", "cancelled"])
+        .default("pending"),
+      userId: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const id = crypto.randomUUID();
+    await db.insert(alterationBookings).values({
+      adminNotes: data.adminNotes ?? null,
+      id,
+      itemDescription: data.itemDescription,
+      notes: data.notes ?? null,
+      preferredDate: new Date(data.preferredDate),
+      preferredTime: data.preferredTime ?? null,
+      price: data.price ?? null,
+      serviceType: data.serviceType,
+      status: data.status,
+      userId: data.userId,
+    });
+    return { id, success: true };
+  });
+
+export const adminUpdateFooterContact = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      address: z.string().min(1),
+      hours: z.string().min(1),
+      phone: z.string().min(1),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const existing = await db.query.storeSettings.findFirst({
+      where: eq(storeSettings.key, "footer_contact"),
+    });
+
+    const jsonValue = JSON.stringify(data);
+
+    if (existing) {
+      await db
+        .update(storeSettings)
+        .set({ value: jsonValue })
+        .where(eq(storeSettings.key, "footer_contact"));
+    } else {
+      await db.insert(storeSettings).values({
+        id: crypto.randomUUID(),
+        key: "footer_contact",
+        value: jsonValue,
+      });
+    }
+
+    return { success: true };
+  });
+
+export const adminCreateCategory = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      description: z.string().optional(),
+      isActive: z.boolean().default(true),
+      name: z.string().min(1),
+      sortOrder: z.number().default(0),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const id = `cat-${crypto.randomUUID().slice(0, 8)}`;
+    const slug = data.name.toLowerCase().replaceAll(/[^a-z0-9-]/g, "-");
+
+    await db.insert(categories).values({
+      description: data.description || null,
+      id,
+      isActive: data.isActive,
+      name: data.name,
+      slug,
+      sortOrder: data.sortOrder,
+    });
+
+    return { id, success: true };
+  });
+
+export const adminDeleteCategory = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db.delete(categories).where(eq(categories.id, id));
+    return { success: true };
   });

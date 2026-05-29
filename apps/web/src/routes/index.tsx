@@ -70,6 +70,40 @@ function HomeComponent() {
 
   return (
     <div className="flex flex-col">
+      {/* Promotions Banner */}
+      {promotionsLoading
+        ? null
+        : promotions.length > 0 && (
+            <section className="border-y border-gold/10 bg-gold/5">
+              <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-4">
+                <div className="flex flex-wrap items-center justify-center gap-6 text-center">
+                  {promotions.map(
+                    (promo: {
+                      id: string;
+                      title: string;
+                      subtitle: string | null;
+                    }) => (
+                      <div
+                        key={promo.id}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <Sparkles className="h-4 w-4 text-gold shrink-0" />
+                        <span className="text-gold font-medium">
+                          {promo.title}
+                        </span>
+                        {promo.subtitle && (
+                          <span className="text-muted-foreground">
+                            {promo.subtitle}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-card">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--gold)_0%,_transparent_50%)] opacity-[0.07]" />
@@ -132,40 +166,6 @@ function HomeComponent() {
           </div>
         </div>
       </section>
-
-      {/* Promotions Banner */}
-      {promotionsLoading
-        ? null
-        : promotions.length > 0 && (
-            <section className="border-y border-gold/10 bg-gold/5">
-              <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-4">
-                <div className="flex flex-wrap items-center justify-center gap-6 text-center">
-                  {promotions.map(
-                    (promo: {
-                      id: string;
-                      title: string;
-                      subtitle: string | null;
-                    }) => (
-                      <div
-                        key={promo.id}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <Sparkles className="h-4 w-4 text-gold shrink-0" />
-                        <span className="text-gold font-medium">
-                          {promo.title}
-                        </span>
-                        {promo.subtitle && (
-                          <span className="text-muted-foreground">
-                            {promo.subtitle}
-                          </span>
-                        )}
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </section>
-          )}
 
       {/* Featured Products — horizontal scroll all screens */}
       <section className="py-20">

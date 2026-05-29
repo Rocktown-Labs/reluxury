@@ -5,13 +5,23 @@ import {
   TabsList,
   TabsTrigger,
 } from "@reluxury/ui/components/tabs";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import { Package, Scissors, Calendar, User, ArrowRight } from "lucide-react";
+import { z } from "zod";
 
 import { getMyAlterationBookings } from "@/functions/alterations";
 import { getMyEventRegistrations } from "@/functions/events";
 import { getUser } from "@/functions/get-user";
 import { getOrders } from "@/functions/orders";
+
+const dashboardSearchSchema = z.object({
+  tab: z.enum(["orders", "bookings", "events", "profile"]).optional(),
+});
 
 export const Route = createFileRoute("/dashboard")({
   beforeLoad: async () => {
@@ -30,10 +40,13 @@ export const Route = createFileRoute("/dashboard")({
     ]);
     return { bookings, orders, registrations, session: context.session };
   },
+  validateSearch: (search) => dashboardSearchSchema.parse(search),
 });
 
 function DashboardComponent() {
   const { orders, bookings, registrations, session } = Route.useLoaderData();
+  const { tab } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
 
   const statusColors: Record<string, string> = {
     approved: "bg-blue-500/10 text-blue-500",
@@ -59,7 +72,16 @@ function DashboardComponent() {
         </h1>
       </div>
 
-      <Tabs defaultValue="orders">
+      <Tabs
+        value={tab ?? "orders"}
+        onValueChange={(val) =>
+          navigate({
+            search: {
+              tab: val as "orders" | "bookings" | "events" | "profile",
+            },
+          })
+        }
+      >
         <TabsList className="bg-card border border-gold/10 mb-8">
           <TabsTrigger value="orders" className="gap-2">
             <Package className="h-4 w-4" />

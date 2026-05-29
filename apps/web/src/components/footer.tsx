@@ -1,7 +1,17 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Crown, MapPin, Phone, Clock, Instagram } from "lucide-react";
 
+import { footerContactQueryOptions } from "@/lib/queries";
+
 export default function Footer() {
+  const { data: contact } = useQuery(footerContactQueryOptions());
+  const address =
+    contact?.address ?? "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113";
+  const phone = contact?.phone ?? "(501) 404-8696";
+  const hours =
+    contact?.hours ?? "Tue–Fri: 10am–6pm\nSat: 10am–5pm\nSun–Mon: Closed";
+
   return (
     <footer className="border-t border-gold/10 bg-card">
       <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-12">
@@ -63,31 +73,20 @@ export default function Footer() {
             <ul className="space-y-3">
               <li className="flex items-start gap-3 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4 mt-0.5 text-gold shrink-0" />
-                <span>
-                  14217 Corvallis Rd, Ste F<br />
-                  Maumelle, AR 72113
-                </span>
+                <span className="whitespace-pre-line">{address}</span>
               </li>
               <li className="flex items-center gap-3 text-sm text-muted-foreground">
                 <Phone className="h-4 w-4 text-gold shrink-0" />
                 <a
-                  href="tel:5014048696"
+                  href={`tel:${phone.replaceAll(/\D/g, "")}`}
                   className="hover:text-gold transition-colors"
                 >
-                  (501) 404-8696
+                  {phone}
                 </a>
               </li>
               <li className="flex items-start gap-3 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4 mt-0.5 text-gold shrink-0" />
-                <span>
-                  Tue–Fri: 10am–6pm
-                  <br />
-                  Sat: 10am–5pm
-                  <br />
-                  <span className="text-muted-foreground/60">
-                    Sun–Mon: Closed
-                  </span>
-                </span>
+                <span className="whitespace-pre-line">{hours}</span>
               </li>
             </ul>
           </div>

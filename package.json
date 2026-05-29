@@ -21,14 +21,16 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "turbo dev",
+    "dev": "portless reluxury turbo -F @reluxury/infra dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
     "dev:web": "turbo -F web dev",
     "db:push": "turbo -F @reluxury/db db:push",
     "db:generate": "turbo -F @reluxury/db db:generate",
     "deploy": "turbo -F @reluxury/infra deploy",
+    "deploy:prod": "turbo -F @reluxury/infra deploy -- --stage prod",
     "destroy": "turbo -F @reluxury/infra destroy",
+    "test": "turbo test",
     "check": "ultracite check",
     "fix": "ultracite fix"
   },
@@ -44,6 +46,7 @@
     "lefthook": "latest",
     "oxfmt": "latest",
     "oxlint": "latest",
+    "portless": "^0.13.1",
     "turbo": "^2.8.12",
     "typescript": "catalog:",
     "ultracite": "7.6.3"

@@ -5,6 +5,7 @@ import {
   productImages,
   products,
   promotions,
+  storeSettings,
 } from "@reluxury/db/schema";
 import { createServerFn } from "@tanstack/react-start";
 import {
@@ -111,6 +112,11 @@ export const getProducts = createServerFn({ method: "GET" })
 
     if (data.category) {
       conditions.push(eq(products.categoryId, data.category));
+    } else {
+      // Exclude workshops by default from standard product listings
+      conditions.push(
+        sql`${products.categoryId} IS NULL OR ${products.categoryId} != 'cat-workshops'`
+      );
     }
     if (data.gender) {
       conditions.push(eq(products.gender, data.gender));
@@ -209,6 +215,7 @@ export const getProductBrands = createServerFn({ method: "GET" }).handler(
 
 export const getEvents = createServerFn({ method: "GET" }).handler(async () => {
   const db = createDb();
+  await syncAllEventsToProducts(db);
   return db.query.events.findMany({
     orderBy: [asc(events.startDate)],
     where: eq(events.isActive, true),
@@ -219,6 +226,7 @@ export const getEventBySlug = createServerFn({ method: "GET" })
   .inputValidator(z.string())
   .handler(async ({ data: slug }) => {
     const db = createDb();
+    await syncAllEventsToProducts(db);
     return db.query.events.findFirst({
       where: and(eq(events.slug, slug), eq(events.isActive, true)),
     });
@@ -241,3 +249,95 @@ export const getPromotions = createServerFn({ method: "GET" })
       where: and(...conditions),
     });
   });
+
+export const getFooterContact = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const db = createDb();
+    const setting = await db.query.storeSettings.findFirst({
+      where: eq(storeSettings.key, "footer_contact"),
+    });
+    if (setting) {
+      try {
+        return JSON.parse(setting.value);
+      } catch {
+        // Fallback below
+      }
+    }
+    return {
+      address: "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113",
+      hours: "Tue–Fri: 10am–6pm\nSat: 10am–5pm\nSun–Mon: Closed",
+      phone: "(501) 404-8696",
+    };
+  }
+);
+
+async function syncAllEventsToProducts(db: ReturnType<typeof createDb>) {
+  // 1. Ensure Workshops category exists
+  const workshopsCat = await db.query.categories.findFirst({
+    where: eq(categories.id, "cat-workshops"),
+  });
+  if (!workshopsCat) {
+    await db.insert(categories).values({
+      description: "ReLUXURY Creative Workshops and Classes",
+      id: "cat-workshops",
+      isActive: true,
+      name: "Workshops",
+      slug: "workshops",
+      sortOrder: 99,
+    });
+  }
+
+  // 2. Fetch all events
+  const allEvents = await db.query.events.findMany();
+  for (const event of allEvents) {
+    const existingProduct = await db.query.products.findFirst({
+      where: eq(products.id, event.id),
+    });
+
+    const productValues = {
+      brand: "ReLUXURY Studio",
+      categoryId: "cat-workshops",
+      colors: JSON.stringify(["Default"]),
+      condition: "new" as const,
+      description: event.description || "",
+      featured: false,
+      gender: "unisex" as const,
+      id: event.id,
+      isActive: event.isActive,
+      price: event.price,
+      quantity: event.capacity ?? 10,
+      sizes: JSON.stringify(["Standard"]),
+      slug: `event-${event.slug}`,
+      title: event.title,
+    };
+
+    if (existingProduct) {
+      await db
+        .update(products)
+        .set(productValues)
+        .where(eq(products.id, event.id));
+    } else {
+      await db.insert(products).values(productValues);
+    }
+
+    if (event.imageUrl) {
+      const existingImg = await db.query.productImages.findFirst({
+        where: eq(productImages.productId, event.id),
+      });
+      if (existingImg) {
+        await db
+          .update(productImages)
+          .set({ url: event.imageUrl })
+          .where(eq(productImages.productId, event.id));
+      } else {
+        await db.insert(productImages).values({
+          id: crypto.randomUUID(),
+          isPrimary: true,
+          productId: event.id,
+          sortOrder: 0,
+          url: event.imageUrl,
+        });
+      }
+    }
+  }
+}

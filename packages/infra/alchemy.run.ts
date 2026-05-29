@@ -14,20 +14,40 @@ const productImages = await R2Bucket("product-images", {
   devDomain: true,
 });
 
+const isProd = app.stage === "prod";
+
 export const web = await TanStackStart("web", {
+  adopt: true,
   bindings: {
+    ADMIN_EMAILS: alchemy.env.ADMIN_EMAILS ?? "",
     // oxlint-disable-next-line typescript/no-non-null-assertion
     BETTER_AUTH_SECRET: alchemy.secret.env.BETTER_AUTH_SECRET!,
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    BETTER_AUTH_URL: alchemy.env.BETTER_AUTH_URL!,
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    CORS_ORIGIN: alchemy.env.CORS_ORIGIN!,
+    BETTER_AUTH_URL: isProd
+      ? "https://reluxury-web.rocktown-labs.workers.dev"
+      : (alchemy.env.BETTER_AUTH_URL as string),
+    CORS_ORIGIN: isProd
+      ? "https://reluxury-web.rocktown-labs.workers.dev"
+      : (alchemy.env.CORS_ORIGIN as string),
     DB: db,
     PRODUCT_IMAGES: productImages,
     PRODUCT_IMAGES_PUBLIC_URL:
       alchemy.env.PRODUCT_IMAGES_PUBLIC_URL ?? productImages.devDomain ?? "",
   },
   cwd: "../../apps/web",
+  dev: process.env.PORT
+    ? {
+        command: `bun vite dev --host ${process.env.HOST ?? "127.0.0.1"} --port ${process.env.PORT}`,
+      }
+    : undefined,
+  name: "reluxury-web",
+  observability: {
+    enabled: true,
+  },
+  placement: {
+    mode: "smart",
+  },
+  port: process.env.PORT ? Number(process.env.PORT) : undefined,
+  url: true,
 });
 
 console.log(`Web    -> ${web.url}`);

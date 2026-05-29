@@ -1,4 +1,5 @@
 import { Toaster } from "@reluxury/ui/components/sonner";
+import * as Sentry from "@sentry/tanstackstart-react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
   HeadContent,
@@ -6,6 +7,7 @@ import {
   Scripts,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import Footer from "../components/footer";
 import Header from "../components/header";
@@ -18,6 +20,7 @@ export interface RouterAppContext {}
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   component: RootDocument,
+  errorComponent: RootErrorComponent,
 
   head: () => ({
     links: [
@@ -89,6 +92,39 @@ function RootDocument() {
           </div>
           <Toaster richColors />
         </QueryClientProvider>
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+function RootErrorComponent({ error }: { error: unknown }) {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
+  return (
+    <html lang="en" className="dark">
+      <head>
+        <HeadContent />
+      </head>
+      <body className="min-h-screen bg-background text-foreground">
+        <div className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
+          <h1 className="font-display text-3xl text-gold mb-4">
+            Something went wrong
+          </h1>
+          <p className="text-muted-foreground mb-6 max-w-md">
+            We&apos;ve been notified and are looking into it. Please try
+            refreshing the page.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md bg-gold px-6 py-2 text-sm font-medium text-primary-foreground hover:bg-gold-dark transition-colors"
+          >
+            Refresh Page
+          </button>
+        </div>
         <Scripts />
       </body>
     </html>

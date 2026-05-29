@@ -7,6 +7,10 @@ import {
   adminGetEvents,
   adminGetAlterations,
   adminGetPromotions,
+  adminGetOrderById,
+  adminGetAlterationById,
+  adminGetEventById,
+  adminGetCustomers,
 } from "@/functions/admin";
 import { getCart } from "@/functions/cart";
 import {
@@ -19,6 +23,7 @@ import {
   getEvents,
   getEventBySlug,
   getPromotions,
+  getFooterContact,
 } from "@/functions/store";
 
 export const storeKeys = {
@@ -28,6 +33,7 @@ export const storeKeys = {
   event: (slug: string) => [...storeKeys.all, "event", slug] as const,
   events: () => [...storeKeys.all, "events"] as const,
   featured: () => [...storeKeys.all, "featured"] as const,
+  footerContact: () => [...storeKeys.all, "footerContact"] as const,
   newArrivals: () => [...storeKeys.all, "newArrivals"] as const,
   product: (slug: string) => [...storeKeys.all, "product", slug] as const,
   products: (filters: Record<string, unknown>) =>
@@ -38,8 +44,12 @@ export const storeKeys = {
 
 export const adminKeys = {
   all: ["admin"] as const,
+  alteration: (id: string) => [...adminKeys.all, "alteration", id] as const,
   alterations: () => [...adminKeys.all, "alterations"] as const,
+  customers: () => [...adminKeys.all, "customers"] as const,
+  event: (id: string) => [...adminKeys.all, "event", id] as const,
   events: () => [...adminKeys.all, "events"] as const,
+  order: (orderId: string) => [...adminKeys.all, "order", orderId] as const,
   orders: () => [...adminKeys.all, "orders"] as const,
   products: () => [...adminKeys.all, "products"] as const,
   promotions: () => [...adminKeys.all, "promotions"] as const,
@@ -163,4 +173,34 @@ export const cartQueryOptions = () =>
   queryOptions({
     queryFn: () => getCart(),
     queryKey: cartKeys.items(),
+  });
+
+export const footerContactQueryOptions = () =>
+  queryOptions({
+    queryFn: () => getFooterContact(),
+    queryKey: storeKeys.footerContact(),
+  });
+
+export const adminOrderByIdQueryOptions = (orderId: string) =>
+  queryOptions({
+    queryFn: () => adminGetOrderById({ data: orderId }),
+    queryKey: adminKeys.order(orderId),
+  });
+
+export const adminAlterationByIdQueryOptions = (id: string) =>
+  queryOptions({
+    queryFn: () => adminGetAlterationById({ data: id }),
+    queryKey: adminKeys.alteration(id),
+  });
+
+export const adminEventByIdQueryOptions = (id: string) =>
+  queryOptions({
+    queryFn: () => adminGetEventById({ data: id }),
+    queryKey: adminKeys.event(id),
+  });
+
+export const adminCustomersQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetCustomers(),
+    queryKey: adminKeys.customers(),
   });

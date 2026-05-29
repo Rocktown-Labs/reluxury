@@ -1,5 +1,12 @@
+/* oxlint-disable complexity */
 import { createDb } from "@reluxury/db";
-import { orders, orderItems, cartItems, products } from "@reluxury/db/schema";
+import {
+  orders,
+  orderItems,
+  cartItems,
+  products,
+  eventRegistrations,
+} from "@reluxury/db/schema";
 import { createServerFn } from "@tanstack/react-start";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
@@ -129,6 +136,31 @@ export const createOrder = createServerFn({ method: "POST" })
         .update(products)
         .set({ quantity: item.product.quantity - item.quantity })
         .where(eq(products.id, item.productId));
+
+      // If it is a workshop product, automatically register the user for it
+      if (item.product.categoryId === "cat-workshops" && userId) {
+        const existingReg = await db.query.eventRegistrations.findFirst({
+          where: and(
+            eq(eventRegistrations.eventId, item.productId),
+            eq(eventRegistrations.userId, userId)
+          ),
+        });
+
+        if (existingReg) {
+          await db
+            .update(eventRegistrations)
+            .set({ paymentStatus: "paid" })
+            .where(eq(eventRegistrations.id, existingReg.id));
+        } else {
+          await db.insert(eventRegistrations).values({
+            eventId: item.productId,
+            id: crypto.randomUUID(),
+            paymentStatus: "paid",
+            status: "registered",
+            userId,
+          });
+        }
+      }
     }
 
     // Clear DB cart for logged-in users
