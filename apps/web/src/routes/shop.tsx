@@ -76,9 +76,6 @@ function ShopComponent() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  if (pathname !== "/shop" && pathname !== "/shop/") {
-    return <Outlet />;
-  }
 
   const search = useSearch({ from: "/shop" });
   const navigate = Route.useNavigate();
@@ -125,6 +122,10 @@ function ShopComponent() {
     search.brand,
     search.search,
   ].filter(Boolean).length;
+
+  if (pathname !== "/shop" && pathname !== "/shop/") {
+    return <Outlet />;
+  }
 
   return (
     <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-8">

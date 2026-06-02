@@ -12,7 +12,10 @@ export default [
         "src/**/*.server.test.{ts,tsx}",
         "src/__tests__/e2e/**/*",
       ],
-      include: ["src/__tests__/browser/**/*.test.{ts,tsx}", "src/**/*.test.{ts,tsx}"],
+      include: [
+        "src/__tests__/browser/**/*.test.{ts,tsx}",
+        "src/**/*.test.{ts,tsx}",
+      ],
       name: "browser",
     },
   },
@@ -27,7 +30,10 @@ export default [
     ],
     test: {
       exclude: ["src/__tests__/e2e/**/*"],
-      include: ["src/__tests__/server/**/*.test.{ts,tsx}", "src/**/*.server.test.{ts,tsx}"],
+      include: [
+        "src/__tests__/server/**/*.test.{ts,tsx}",
+        "src/**/*.server.test.{ts,tsx}",
+      ],
       name: "server",
     },
   },

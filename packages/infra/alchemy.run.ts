@@ -30,8 +30,16 @@ export const web = await TanStackStart("web", {
       : (alchemy.env.CORS_ORIGIN as string),
     DB: db,
     PRODUCT_IMAGES: productImages,
-    PRODUCT_IMAGES_PUBLIC_URL:
-      alchemy.env.PRODUCT_IMAGES_PUBLIC_URL ?? productImages.devDomain ?? "",
+    PRODUCT_IMAGES_PUBLIC_URL: (() => {
+      const val =
+        (alchemy.env.PRODUCT_IMAGES_PUBLIC_URL as string) ||
+        productImages.devDomain ||
+        "";
+      if (val && !val.startsWith("http")) {
+        return `https://${val}`;
+      }
+      return val;
+    })(),
   },
   cwd: "../../apps/web",
   dev: process.env.PORT
