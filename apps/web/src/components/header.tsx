@@ -7,7 +7,7 @@ import {
 } from "@reluxury/ui/components/sheet";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ShoppingBag, Menu, Crown } from "lucide-react";
+import { ShoppingBag, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getCart } from "@/functions/cart";
@@ -80,10 +80,9 @@ export default function Header() {
             <div className="flex flex-col gap-6 mt-8">
               <Link
                 to="/"
-                className="flex items-center gap-2"
+                className="flex items-center"
                 onClick={() => setMobileOpen(false)}
               >
-                <Crown className="h-6 w-6 text-gold" />
                 <span className="font-display text-2xl font-semibold tracking-wide text-gold">
                   ReLUXURY
                 </span>
@@ -106,8 +105,7 @@ export default function Header() {
         </Sheet>
 
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2">
-          <Crown className="h-6 w-6 text-gold hidden sm:block" />
+        <Link to="/" className="flex items-center">
           <span className="font-display text-2xl font-semibold tracking-[0.15em] text-gold">
             ReLUXURY
           </span>

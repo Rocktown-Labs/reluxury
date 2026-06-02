@@ -37,6 +37,11 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         href: "https://fonts.gstatic.com",
         rel: "preconnect",
       },
+      {
+        href: "/favicon.jpg",
+        rel: "icon",
+        type: "image/jpeg",
+      },
     ],
     meta: [
       {
@@ -70,6 +75,27 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       {
         content: "website",
         property: "og:type",
+      },
+      {
+        content: "/logo.jpg",
+        property: "og:image",
+      },
+      {
+        content: "summary_large_image",
+        name: "twitter:card",
+      },
+      {
+        content: "ReLUXURY | Elevated Resale & Alterations Boutique",
+        name: "twitter:title",
+      },
+      {
+        content:
+          "Elevated resale fashion and expert alterations in Maumelle, AR.",
+        name: "twitter:description",
+      },
+      {
+        content: "/logo.jpg",
+        name: "twitter:image",
       },
     ],
   }),
