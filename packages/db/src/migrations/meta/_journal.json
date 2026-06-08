@@ -15,6 +15,34 @@
       "when": 1778022773633,
       "tag": "0001_chunky_miek",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780685458218,
+      "tag": "0002_slow_pretty_boy",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780685459000,
+      "tag": "0003_swift_auth_admin_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780685460000,
+      "tag": "0004_golden_dummy_products",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1780944000000,
+      "tag": "0005_seed_catalog_and_workshop_cart_products",
+      "breakpoints": true
     }
   ]
 }

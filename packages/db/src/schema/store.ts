@@ -116,6 +116,7 @@ export const orders = sqliteTable(
   "orders",
   {
     adminNotes: text("admin_notes"),
+    carrier: text("carrier"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -131,6 +132,9 @@ export const orders = sqliteTable(
     phone: text("phone"),
     shippingAddress: text("shipping_address"),
     shippingCost: real("shipping_cost").default(0).notNull(),
+    shippingLabelUrl: text("shipping_label_url"),
+    shippoShipmentId: text("shippo_shipment_id"),
+    shippoTransactionId: text("shippo_transaction_id"),
     status: text("status", {
       enum: [
         "pending",
@@ -147,6 +151,8 @@ export const orders = sqliteTable(
     subtotal: real("subtotal").notNull(),
     tax: real("tax").default(0).notNull(),
     total: real("total").notNull(),
+    trackingNumber: text("tracking_number"),
+    trackingStatus: text("tracking_status"),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),

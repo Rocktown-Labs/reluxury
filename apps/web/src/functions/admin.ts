@@ -12,10 +12,13 @@ import {
 } from "@reluxury/db/schema";
 import { env } from "@reluxury/env/server";
 import { createServerFn } from "@tanstack/react-start";
-import { eq, desc, count, sql } from "drizzle-orm";
+import { eq, desc, count, sql, isNull, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
+import { shippo } from "@/lib/shippo";
 import { authMiddleware } from "@/middleware/auth";
+
+import { WORKSHOP_PRODUCT_CATEGORY_ID } from "./store";
 
 function requireAdmin(context: {
   session: { user: { role?: string | null } } | null;
@@ -24,6 +27,11 @@ function requireAdmin(context: {
     throw new Error("Unauthorized: Admin access required");
   }
 }
+
+const catalogProductFilter = or(
+  isNull(products.categoryId),
+  ne(products.categoryId, WORKSHOP_PRODUCT_CATEGORY_ID)
+);
 
 const IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -47,6 +55,89 @@ function toSafeFileName(name: string): string {
   return name.toLowerCase().replaceAll(/[^a-z0-9.\-_]/g, "-");
 }
 
+async function ensureWorkshopProductCategory(db: ReturnType<typeof createDb>) {
+  const existing = await db.query.categories.findFirst({
+    where: eq(categories.id, WORKSHOP_PRODUCT_CATEGORY_ID),
+  });
+
+  if (existing) {
+    return;
+  }
+
+  await db.insert(categories).values({
+    description: "Cart backing records for ReLUXURY workshops and classes.",
+    id: WORKSHOP_PRODUCT_CATEGORY_ID,
+    isActive: false,
+    name: "Workshops",
+    slug: "workshops",
+    sortOrder: 99,
+  });
+}
+
+async function syncWorkshopToCartProduct(
+  db: ReturnType<typeof createDb>,
+  event: typeof events.$inferSelect
+) {
+  await ensureWorkshopProductCategory(db);
+
+  const productValues = {
+    brand: "ReLUXURY Studio",
+    categoryId: WORKSHOP_PRODUCT_CATEGORY_ID,
+    colors: JSON.stringify(["Workshop"]),
+    condition: "new" as const,
+    description: event.description ?? "",
+    featured: false,
+    gender: "unisex" as const,
+    isActive: event.isActive,
+    price: event.price,
+    quantity: event.capacity ?? 999,
+    sizes: JSON.stringify(["Registration"]),
+    slug: `event-${event.slug}`,
+    title: event.title,
+  };
+
+  const existingProduct = await db.query.products.findFirst({
+    where: eq(products.id, event.id),
+  });
+
+  if (existingProduct) {
+    await db
+      .update(products)
+      .set(productValues)
+      .where(eq(products.id, event.id));
+  } else {
+    await db.insert(products).values({
+      id: event.id,
+      ...productValues,
+    });
+  }
+
+  if (!event.imageUrl) {
+    return;
+  }
+
+  const existingImage = await db.query.productImages.findFirst({
+    where: eq(productImages.productId, event.id),
+  });
+
+  if (existingImage) {
+    await db
+      .update(productImages)
+      .set({ alt: event.title, url: event.imageUrl })
+      .where(eq(productImages.id, existingImage.id));
+    return;
+  }
+
+  await db.insert(productImages).values({
+    alt: event.title,
+    id: crypto.randomUUID(),
+    isPrimary: true,
+    productId: event.id,
+    sortOrder: 0,
+    url: event.imageUrl,
+  });
+}
+
 // Products Admin
 export const adminGetProducts = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -55,6 +146,7 @@ export const adminGetProducts = createServerFn({ method: "GET" })
     const db = createDb();
     return db.query.products.findMany({
       orderBy: [desc(products.createdAt)],
+      where: catalogProductFilter,
       with: {
         category: true,
         images: {
@@ -436,6 +528,12 @@ export const adminCreateEvent = createServerFn({ method: "POST" })
       endDate: data.endDate ? new Date(data.endDate) : null,
       isActive: true,
     });
+    const event = await db.query.events.findFirst({
+      where: eq(events.id, id),
+    });
+    if (event) {
+      await syncWorkshopToCartProduct(db, event);
+    }
     return { id };
   });
 
@@ -459,8 +557,28 @@ export const adminUpdateEvent = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     requireAdmin(context);
     const db = createDb();
-    const { id, ...update } = data;
+    const { id, ...updateData } = data;
+    let endDate: Date | null | undefined;
+    if (updateData.endDate === null) {
+      endDate = null;
+    } else if (updateData.endDate) {
+      endDate = new Date(updateData.endDate);
+    }
+
+    const update = {
+      ...updateData,
+      endDate,
+      startDate: updateData.startDate
+        ? new Date(updateData.startDate)
+        : undefined,
+    };
     await db.update(events).set(update).where(eq(events.id, id));
+    const event = await db.query.events.findFirst({
+      where: eq(events.id, id),
+    });
+    if (event) {
+      await syncWorkshopToCartProduct(db, event);
+    }
     return { success: true };
   });
 
@@ -470,6 +588,8 @@ export const adminDeleteEvent = createServerFn({ method: "POST" })
   .handler(async ({ context, data: id }) => {
     requireAdmin(context);
     const db = createDb();
+    await db.delete(productImages).where(eq(productImages.productId, id));
+    await db.delete(products).where(eq(products.id, id));
     await db.delete(events).where(eq(events.id, id));
     return { success: true };
   });
@@ -596,7 +716,7 @@ export const adminGetStats = createServerFn({ method: "GET" })
         .select({ total: sql<number>`sum(${orders.total})` })
         .from(orders)
         .where(eq(orders.status, "completed")),
-      db.select({ count: count() }).from(products),
+      db.select({ count: count() }).from(products).where(catalogProductFilter),
       db
         .select({ count: count() })
         .from(events)
@@ -793,4 +913,204 @@ export const adminDeleteCategory = createServerFn({ method: "POST" })
     const db = createDb();
     await db.delete(categories).where(eq(categories.id, id));
     return { success: true };
+  });
+
+// Shippo Fulfillment Pipeline
+export const adminGetShippoRates = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      height: z.number().min(1),
+      length: z.number().min(1),
+      orderId: z.string(),
+      weight: z.number().min(0.1),
+      width: z.number().min(1),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, data.orderId),
+    });
+
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    if (order.deliveryMethod !== "shipping") {
+      throw new Error("Order is not set for shipping");
+    }
+
+    if (!order.shippingAddress) {
+      throw new Error("Order does not have a shipping address");
+    }
+
+    let shippingAddressObj: {
+      address: string;
+      city: string;
+      email?: string;
+      name: string;
+      phone?: string;
+      state: string;
+      zip: string;
+    };
+
+    try {
+      shippingAddressObj = JSON.parse(order.shippingAddress);
+    } catch {
+      throw new Error("Invalid shipping address format");
+    }
+
+    const toAddress = {
+      city: shippingAddressObj.city,
+      country: "US",
+      email: order.email,
+      name: shippingAddressObj.name,
+      phone: order.phone || undefined,
+      state: shippingAddressObj.state,
+      street1: shippingAddressObj.address,
+      zip: shippingAddressObj.zip,
+    };
+
+    const rates = await shippo.getRates(toAddress, {
+      height: data.height,
+      length: data.length,
+      weight: data.weight,
+      width: data.width,
+    });
+
+    return { rates };
+  });
+
+export const adminPurchaseShippoLabel = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      orderId: z.string(),
+      rateObjectId: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, data.orderId),
+    });
+
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    const transaction = await shippo.purchaseLabel(data.rateObjectId);
+
+    if (transaction.status !== "SUCCESS") {
+      throw new Error(
+        `Failed to purchase label: ${transaction.messages.join(", ") || "Unknown error"}`
+      );
+    }
+
+    const timestamp = new Date().toLocaleString();
+    const notificationText = `[Notification] Email sent to ${order.email}: "Your order ${order.orderNumber} has shipped! Tracking number is ${transaction.trackingNumber} via USPS."`;
+    const newNotes =
+      `${order.adminNotes || ""}\n\n[${timestamp}] Shipped via USPS.\nTracking: ${transaction.trackingNumber}\nLabel URL: ${transaction.labelUrl}\n${notificationText}`.trim();
+
+    await db
+      .update(orders)
+      .set({
+        adminNotes: newNotes,
+        carrier: "USPS",
+        shippingLabelUrl: transaction.labelUrl,
+        shippoTransactionId: transaction.objectId,
+        status: "shipped",
+        trackingNumber: transaction.trackingNumber,
+      })
+      .where(eq(orders.id, data.orderId));
+
+    return { success: true, transaction };
+  });
+
+export const adminMarkReadyForPickup = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      orderId: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, data.orderId),
+    });
+
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    if (order.deliveryMethod !== "pickup") {
+      throw new Error("Order is not set for in-store pickup");
+    }
+
+    const timestamp = new Date().toLocaleString();
+    const notificationText = `[Notification] Email sent to ${order.email}: "Your order ${order.orderNumber} is ready for pickup in store! Please visit us at our boutique during business hours."`;
+    const newNotes =
+      `${order.adminNotes || ""}\n\n[${timestamp}] Marked ready for pickup.\n${notificationText}`.trim();
+
+    await db
+      .update(orders)
+      .set({
+        adminNotes: newNotes,
+        status: "ready_for_pickup",
+      })
+      .where(eq(orders.id, data.orderId));
+
+    return { success: true };
+  });
+
+export const adminRefundShippoLabel = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      orderId: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, data.orderId),
+    });
+
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    if (!order.shippoTransactionId) {
+      throw new Error("No Shippo shipping label found for this order");
+    }
+
+    const refund = await shippo.refundLabel(order.shippoTransactionId);
+
+    const timestamp = new Date().toLocaleString();
+    const newNotes =
+      `${order.adminNotes || ""}\n\n[${timestamp}] Requested shipping label refund (Status: ${refund.status}).\nStatus reverted to preparing.`.trim();
+
+    await db
+      .update(orders)
+      .set({
+        adminNotes: newNotes,
+        carrier: null,
+        shippingLabelUrl: null,
+        shippoTransactionId: null,
+        status: "preparing",
+        trackingNumber: null,
+      })
+      .where(eq(orders.id, data.orderId));
+
+    return { status: refund.status, success: true };
   });

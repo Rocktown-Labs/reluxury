@@ -19,8 +19,19 @@ import {
   count,
   gte,
   lte,
+  inArray,
+  isNull,
+  ne,
+  or,
 } from "drizzle-orm";
 import { z } from "zod";
+
+export const WORKSHOP_PRODUCT_CATEGORY_ID = "cat-workshops";
+
+const catalogProductFilter = or(
+  isNull(products.categoryId),
+  ne(products.categoryId, WORKSHOP_PRODUCT_CATEGORY_ID)
+);
 
 export const getProductsByIds = createServerFn({ method: "POST" })
   .inputValidator(z.array(z.string()))
@@ -30,7 +41,7 @@ export const getProductsByIds = createServerFn({ method: "POST" })
       return [];
     }
     return db.query.products.findMany({
-      where: and(eq(products.isActive, true), sql`${products.id} IN ${ids}`),
+      where: and(eq(products.isActive, true), inArray(products.id, ids)),
       with: {
         category: true,
         images: {
@@ -46,7 +57,12 @@ export const getCategories = createServerFn({ method: "GET" }).handler(
     return db
       .select()
       .from(categories)
-      .where(eq(categories.isActive, true))
+      .where(
+        and(
+          eq(categories.isActive, true),
+          sql`${categories.id} != ${WORKSHOP_PRODUCT_CATEGORY_ID}`
+        )
+      )
       .orderBy(asc(categories.sortOrder));
   }
 );
@@ -60,7 +76,8 @@ export const getFeaturedProducts = createServerFn({ method: "GET" }).handler(
       where: and(
         eq(products.featured, true),
         eq(products.isActive, true),
-        isNotNull(products.categoryId)
+        isNotNull(products.categoryId),
+        catalogProductFilter
       ),
       with: {
         category: true,
@@ -79,7 +96,7 @@ export const getNewArrivals = createServerFn({ method: "GET" }).handler(
     return db.query.products.findMany({
       limit: 8,
       orderBy: [desc(products.createdAt)],
-      where: eq(products.isActive, true),
+      where: and(eq(products.isActive, true), catalogProductFilter),
       with: {
         category: true,
         images: {
@@ -108,15 +125,10 @@ export const getProducts = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     const db = createDb();
-    const conditions = [eq(products.isActive, true)];
+    const conditions = [eq(products.isActive, true), catalogProductFilter];
 
     if (data.category) {
       conditions.push(eq(products.categoryId, data.category));
-    } else {
-      // Exclude workshops by default from standard product listings
-      conditions.push(
-        sql`${products.categoryId} IS NULL OR ${products.categoryId} != 'cat-workshops'`
-      );
     }
     if (data.gender) {
       conditions.push(eq(products.gender, data.gender));
@@ -189,7 +201,11 @@ export const getProductBySlug = createServerFn({ method: "GET" })
   .handler(async ({ data: slug }) => {
     const db = createDb();
     return db.query.products.findFirst({
-      where: and(eq(products.slug, slug), eq(products.isActive, true)),
+      where: and(
+        eq(products.slug, slug),
+        eq(products.isActive, true),
+        catalogProductFilter
+      ),
       with: {
         category: true,
         images: {
@@ -205,7 +221,7 @@ export const getProductBrands = createServerFn({ method: "GET" }).handler(
     const results = await db
       .select({ brand: products.brand })
       .from(products)
-      .where(eq(products.isActive, true))
+      .where(and(eq(products.isActive, true), catalogProductFilter))
       .groupBy(products.brand);
     return results
       .map((r: { brand: string | null }) => r.brand)
@@ -215,7 +231,6 @@ export const getProductBrands = createServerFn({ method: "GET" }).handler(
 
 export const getEvents = createServerFn({ method: "GET" }).handler(async () => {
   const db = createDb();
-  await syncAllEventsToProducts(db);
   return db.query.events.findMany({
     orderBy: [asc(events.startDate)],
     where: eq(events.isActive, true),
@@ -226,7 +241,6 @@ export const getEventBySlug = createServerFn({ method: "GET" })
   .inputValidator(z.string())
   .handler(async ({ data: slug }) => {
     const db = createDb();
-    await syncAllEventsToProducts(db);
     return db.query.events.findFirst({
       where: and(eq(events.slug, slug), eq(events.isActive, true)),
     });
@@ -270,74 +284,3 @@ export const getFooterContact = createServerFn({ method: "GET" }).handler(
     };
   }
 );
-
-async function syncAllEventsToProducts(db: ReturnType<typeof createDb>) {
-  // 1. Ensure Workshops category exists
-  const workshopsCat = await db.query.categories.findFirst({
-    where: eq(categories.id, "cat-workshops"),
-  });
-  if (!workshopsCat) {
-    await db.insert(categories).values({
-      description: "ReLUXURY Creative Workshops and Classes",
-      id: "cat-workshops",
-      isActive: true,
-      name: "Workshops",
-      slug: "workshops",
-      sortOrder: 99,
-    });
-  }
-
-  // 2. Fetch all events
-  const allEvents = await db.query.events.findMany();
-  for (const event of allEvents) {
-    const existingProduct = await db.query.products.findFirst({
-      where: eq(products.id, event.id),
-    });
-
-    const productValues = {
-      brand: "ReLUXURY Studio",
-      categoryId: "cat-workshops",
-      colors: JSON.stringify(["Default"]),
-      condition: "new" as const,
-      description: event.description || "",
-      featured: false,
-      gender: "unisex" as const,
-      id: event.id,
-      isActive: event.isActive,
-      price: event.price,
-      quantity: event.capacity ?? 10,
-      sizes: JSON.stringify(["Standard"]),
-      slug: `event-${event.slug}`,
-      title: event.title,
-    };
-
-    if (existingProduct) {
-      await db
-        .update(products)
-        .set(productValues)
-        .where(eq(products.id, event.id));
-    } else {
-      await db.insert(products).values(productValues);
-    }
-
-    if (event.imageUrl) {
-      const existingImg = await db.query.productImages.findFirst({
-        where: eq(productImages.productId, event.id),
-      });
-      if (existingImg) {
-        await db
-          .update(productImages)
-          .set({ url: event.imageUrl })
-          .where(eq(productImages.productId, event.id));
-      } else {
-        await db.insert(productImages).values({
-          id: crypto.randomUUID(),
-          isPrimary: true,
-          productId: event.id,
-          sortOrder: 0,
-          url: event.imageUrl,
-        });
-      }
-    }
-  }
-}

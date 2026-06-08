@@ -29,12 +29,14 @@ export default [
       }),
     ],
     test: {
+      environment: "cloudflare",
       exclude: ["src/__tests__/e2e/**/*"],
       include: [
         "src/__tests__/server/**/*.test.{ts,tsx}",
         "src/**/*.server.test.{ts,tsx}",
       ],
       name: "server",
+      pool: "@cloudflare/vitest-pool-workers",
     },
   },
 ];
