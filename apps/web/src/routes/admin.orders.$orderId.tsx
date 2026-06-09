@@ -81,6 +81,11 @@ const BOX_PRESETS = [
     width: 5.1,
   },
 ];
+const BOX_PRESET_ID = "shipping-box-preset";
+const PACKAGE_LENGTH_ID = "shipping-package-length";
+const PACKAGE_WIDTH_ID = "shipping-package-width";
+const PACKAGE_HEIGHT_ID = "shipping-package-height";
+const PACKAGE_WEIGHT_ID = "shipping-package-weight";
 
 function AdminOrderDetailComponent() {
   const params = Route.useParams();
@@ -516,11 +521,15 @@ function AdminOrderDetailComponent() {
 
                       {/* Box Preset */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-medium text-muted-foreground uppercase">
+                        <label
+                          className="text-[11px] font-medium text-muted-foreground uppercase"
+                          htmlFor={BOX_PRESET_ID}
+                        >
                           Box Preset
                         </label>
                         <select
                           className="w-full bg-background border border-gold/10 rounded p-1.5 text-xs text-foreground focus:outline-none focus:border-gold"
+                          id={BOX_PRESET_ID}
                           value={boxPreset}
                           onChange={(e) => handlePresetChange(e.target.value)}
                         >
@@ -535,46 +544,61 @@ function AdminOrderDetailComponent() {
                       {/* Dimensions Grid */}
                       <div className="grid grid-cols-3 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[10px] text-muted-foreground uppercase">
+                          <label
+                            className="text-[10px] text-muted-foreground uppercase"
+                            htmlFor={PACKAGE_LENGTH_ID}
+                          >
                             Length (in)
                           </label>
                           <Input
-                            type="number"
                             className="h-8 text-xs border-gold/10 focus-visible:ring-gold"
+                            disabled={boxPreset !== "custom"}
+                            id={PACKAGE_LENGTH_ID}
+                            type="number"
                             value={length}
                             onChange={(e) => setLength(e.target.value)}
-                            disabled={boxPreset !== "custom"}
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] text-muted-foreground uppercase">
+                          <label
+                            className="text-[10px] text-muted-foreground uppercase"
+                            htmlFor={PACKAGE_WIDTH_ID}
+                          >
                             Width (in)
                           </label>
                           <Input
-                            type="number"
                             className="h-8 text-xs border-gold/10 focus-visible:ring-gold"
+                            disabled={boxPreset !== "custom"}
+                            id={PACKAGE_WIDTH_ID}
+                            type="number"
                             value={width}
                             onChange={(e) => setWidth(e.target.value)}
-                            disabled={boxPreset !== "custom"}
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] text-muted-foreground uppercase">
+                          <label
+                            className="text-[10px] text-muted-foreground uppercase"
+                            htmlFor={PACKAGE_HEIGHT_ID}
+                          >
                             Height (in)
                           </label>
                           <Input
-                            type="number"
                             className="h-8 text-xs border-gold/10 focus-visible:ring-gold"
+                            disabled={boxPreset !== "custom"}
+                            id={PACKAGE_HEIGHT_ID}
+                            type="number"
                             value={height}
                             onChange={(e) => setHeight(e.target.value)}
-                            disabled={boxPreset !== "custom"}
                           />
                         </div>
                       </div>
 
                       {/* Scale Weight */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-medium text-muted-foreground uppercase flex items-center justify-between">
+                        <label
+                          className="text-[11px] font-medium text-muted-foreground uppercase flex items-center justify-between"
+                          htmlFor={PACKAGE_WEIGHT_ID}
+                        >
                           <span>Scale Weight (oz)</span>
                           <span className="text-[10px] text-gold font-mono">
                             16 oz = 1 lb
@@ -582,9 +606,10 @@ function AdminOrderDetailComponent() {
                         </label>
                         <div className="relative">
                           <Input
-                            type="number"
-                            step="0.1"
                             className="h-9 text-xs border-gold/10 pr-8 focus-visible:ring-gold"
+                            id={PACKAGE_WEIGHT_ID}
+                            step="0.1"
+                            type="number"
                             value={weight}
                             onChange={(e) => setWeight(e.target.value)}
                           />

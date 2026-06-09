@@ -105,12 +105,18 @@ function HomeComponent() {
           )}
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-card">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--gold)_0%,_transparent_50%)] opacity-[0.07]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--gold)_0%,_transparent_50%)] opacity-[0.05]" />
+      <section className="relative min-h-[640px] overflow-hidden bg-background">
+        <img
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+          src="/hero-boutique.png"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/15" />
+        <div className="absolute inset-0 bg-black/20" />
 
-        <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-20 lg:py-28 relative">
-          <div className="max-w-3xl mx-auto text-center space-y-10">
+        <div className="container mx-auto max-w-7xl px-4 lg:px-8 relative flex min-h-[640px] items-center py-20 lg:py-28">
+          <div className="max-w-2xl space-y-10">
             <div className="space-y-6">
               <h1 className="font-display text-5xl lg:text-7xl font-light leading-[1.1] tracking-tight">
                 <span className="text-foreground">Where Luxury Finds</span>
@@ -120,13 +126,13 @@ function HomeComponent() {
                 </span>
               </h1>
 
-              <p className="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
+              <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
                 Curated pre-loved fashion, expert alterations, and hands-on
                 sewing workshops — all under one roof.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <Link to="/shop">
                 <Button
                   size="lg"
@@ -149,7 +155,7 @@ function HomeComponent() {
             </div>
 
             {/* Quick stats */}
-            <div className="flex items-center justify-center gap-8 pt-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-3 pt-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-gold" />
                 In-Store Pickup Available

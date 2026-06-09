@@ -13,6 +13,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { WORKSHOP_PRODUCT_CATEGORY_ID } from "../../functions/store";
 
+const CURRENT_TEST_DATE = 1_780_963_200_000;
+const EXPECTED_UPCOMING_WORKSHOP_IDS = [
+  "workshop-2026-06-21",
+  "workshop-2026-07-12",
+  "workshop-2026-07-26",
+] as const;
+
 const migrationFiles = [
   "0000_clean_network.sql",
   "0001_chunky_miek.sql",
@@ -20,6 +27,8 @@ const migrationFiles = [
   "0003_swift_auth_admin_fields.sql",
   "0004_golden_dummy_products.sql",
   "0005_seed_catalog_and_workshop_cart_products.sql",
+  "0006_create_test_admin_user.sql",
+  "0007_richer_catalog_and_workshops.sql",
 ];
 
 const currentDir = import.meta.dirname;
@@ -89,8 +98,11 @@ describe("Seeded catalog and workshop visibility", () => {
       },
     });
 
-    expect(shopProducts.length).toBeGreaterThanOrEqual(8);
+    expect(shopProducts.length).toBeGreaterThanOrEqual(16);
     expect(shopProducts.some((item) => item.id.startsWith("prod-"))).toBe(true);
+    expect(shopProducts.map((item) => item.id)).toContain(
+      "prod-mens-wool-topcoat"
+    );
     expect(
       shopProducts.every(
         (item) => item.categoryId !== WORKSHOP_PRODUCT_CATEGORY_ID
@@ -155,20 +167,38 @@ describe("Seeded catalog and workshop visibility", () => {
     const [activeEvents, cartProducts] = await Promise.all([
       db.query.events.findMany({
         orderBy: [asc(events.startDate)],
-        where: eq(events.isActive, true),
+        where: and(
+          eq(events.isActive, true),
+          sql`${events.startDate} >= ${CURRENT_TEST_DATE}`
+        ),
       }),
       db.query.products.findMany({
         where: and(
           eq(products.isActive, true),
-          inArray(products.id, ["workshop-2026-06-21"])
+          inArray(products.id, [...EXPECTED_UPCOMING_WORKSHOP_IDS])
         ),
+        with: {
+          images: {
+            limit: 1,
+            orderBy: [asc(productImages.sortOrder)],
+          },
+        },
       }),
     ]);
+    const activeEventIds = activeEvents.map((event) => event.id);
 
-    expect(activeEvents.map((event) => event.id)).toContain(
-      "workshop-2026-06-21"
+    expect(activeEvents.length).toBeGreaterThanOrEqual(3);
+    expect(activeEventIds).toEqual(
+      expect.arrayContaining([...EXPECTED_UPCOMING_WORKSHOP_IDS])
     );
-    expect(cartProducts).toHaveLength(1);
-    expect(cartProducts[0]?.categoryId).toBe(WORKSHOP_PRODUCT_CATEGORY_ID);
+    expect(cartProducts).toHaveLength(EXPECTED_UPCOMING_WORKSHOP_IDS.length);
+    expect(
+      cartProducts.every(
+        (product) => product.categoryId === WORKSHOP_PRODUCT_CATEGORY_ID
+      )
+    ).toBe(true);
+    expect(cartProducts.every((product) => product.images.length > 0)).toBe(
+      true
+    );
   });
 });

@@ -43,6 +43,20 @@
       "when": 1780944000000,
       "tag": "0005_seed_catalog_and_workshop_cart_products",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1780944000001,
+      "tag": "0006_create_test_admin_user",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1780963200000,
+      "tag": "0007_richer_catalog_and_workshops",
+      "breakpoints": true
     }
   ]
 }
