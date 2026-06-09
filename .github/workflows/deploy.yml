@@ -11,6 +11,7 @@ concurrency:
 
 env:
   STAGE: "${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || (github.ref == 'refs/heads/master' && 'prod' || (github.ref == 'refs/heads/main' && 'prod' || github.ref_name)) }}"
+  ALCHEMY_CI_STATE_STORE_CHECK: "false"
 
 jobs:
   deploy:

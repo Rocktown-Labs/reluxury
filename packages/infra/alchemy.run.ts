@@ -7,9 +7,10 @@ config({ path: "./.env" });
 config({ path: "../../apps/web/.env" });
 
 const app = await alchemy("reluxury", {
-  stateStore: process.env.CI
-    ? (scope) => new CloudflareStateStore(scope)
-    : undefined,
+  stateStore:
+    process.env.CI && process.env.ALCHEMY_STATE_TOKEN
+      ? (scope) => new CloudflareStateStore(scope)
+      : undefined,
 });
 
 const db = await D1Database("database", {
