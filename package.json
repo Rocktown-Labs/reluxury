@@ -27,9 +27,9 @@
     "dev:web": "turbo -F web dev",
     "db:push": "turbo -F @reluxury/db db:push",
     "db:generate": "turbo -F @reluxury/db db:generate",
-    "deploy": "turbo -F @reluxury/infra deploy",
+    "deploy": "turbo -F @reluxury/infra deploy --",
     "deploy:prod": "turbo -F @reluxury/infra deploy -- --stage prod",
-    "destroy": "turbo -F @reluxury/infra destroy",
+    "destroy": "turbo -F @reluxury/infra destroy --",
     "test": "turbo test",
     "check": "ultracite check",
     "fix": "ultracite fix"
