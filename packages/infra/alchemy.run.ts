@@ -1,11 +1,16 @@
 import alchemy from "alchemy";
 import { D1Database, R2Bucket, TanStackStart } from "alchemy/cloudflare";
+import { CloudflareStateStore } from "alchemy/state";
 import { config } from "dotenv";
 
 config({ path: "./.env" });
 config({ path: "../../apps/web/.env" });
 
-const app = await alchemy("reluxury");
+const app = await alchemy("reluxury", {
+  stateStore: process.env.CI
+    ? (scope) => new CloudflareStateStore(scope)
+    : undefined,
+});
 
 const db = await D1Database("database", {
   migrationsDir: "../../packages/db/src/migrations",
