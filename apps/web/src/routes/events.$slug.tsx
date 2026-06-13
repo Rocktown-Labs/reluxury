@@ -62,6 +62,7 @@ function EventDetailComponent() {
             size: null,
           },
         });
+        await queryClient.invalidateQueries({ queryKey: ["cart"] });
         await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
       } else {
         addToGuestCart({

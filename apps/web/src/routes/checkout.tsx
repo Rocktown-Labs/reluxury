@@ -7,16 +7,18 @@ import {
   RadioGroupItem,
 } from "@reluxury/ui/components/radio-group";
 import { Separator } from "@reluxury/ui/components/separator";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, MapPin, Truck, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { getCart } from "@/functions/cart";
-import { createOrder } from "@/functions/orders";
+import { createOrder, getCheckoutShippingRates } from "@/functions/orders";
 import { getProductsByIds } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
 import { getGuestCart, clearGuestCart } from "@/lib/guest-cart";
+import { queryClient } from "@/lib/query-client";
+import type { ShippoRate } from "@/lib/shippo";
 
 export const Route = createFileRoute("/checkout")({
   component: CheckoutComponent,
@@ -40,6 +42,7 @@ interface CheckoutItem {
 function CheckoutComponent() {
   const { cartItems: serverCartItems } = Route.useLoaderData();
   const { data: session } = authClient.useSession();
+  const router = useRouter();
 
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "shipping">(
     "pickup"
@@ -47,6 +50,9 @@ function CheckoutComponent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderNumber, setOrderNumber] = useState("");
+  const [shippingRates, setShippingRates] = useState<ShippoRate[]>([]);
+  const [selectedRateId, setSelectedRateId] = useState("");
+  const [isLoadingRates, setIsLoadingRates] = useState(false);
   const [formData, setFormData] = useState({
     address: "",
     city: "",
@@ -113,7 +119,71 @@ function CheckoutComponent() {
   }
 
   const shippingCost = deliveryMethod === "shipping" ? 9.99 : 0;
-  const total = subtotal + shippingCost;
+  const selectedShippingRate = shippingRates.find(
+    (rate) => rate.objectId === selectedRateId
+  );
+  const resolvedShippingCost =
+    deliveryMethod === "shipping"
+      ? Number(selectedShippingRate?.amount ?? shippingCost)
+      : 0;
+  const total = subtotal + resolvedShippingCost;
+
+  const getShippingAddressPayload = () => ({
+    address: formData.address,
+    city: formData.city,
+    email: formData.email,
+    name: formData.name,
+    phone: formData.phone || undefined,
+    state: formData.state,
+    zip: formData.zip,
+  });
+
+  const handleGetShippingRates = async () => {
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.address ||
+      !formData.city ||
+      !formData.state ||
+      !formData.zip
+    ) {
+      toast.error("Complete the shipping address to see delivery rates");
+      return;
+    }
+
+    setIsLoadingRates(true);
+    try {
+      const result = await getCheckoutShippingRates({
+        data: {
+          guestItems: session
+            ? undefined
+            : getGuestCart().map((item) => ({
+                productId: item.productId,
+                quantity: item.quantity,
+                size: item.size,
+              })),
+          shippingAddress: getShippingAddressPayload(),
+        },
+      });
+
+      if (!result.success) {
+        toast.error(
+          result.messages.join(", ") || "Shipping address is invalid"
+        );
+        setShippingRates([]);
+        setSelectedRateId("");
+        return;
+      }
+
+      setShippingRates(result.rates);
+      setSelectedRateId(result.rates[0]?.objectId ?? "");
+      toast.success("Shipping rates updated");
+    } catch {
+      toast.error("Failed to retrieve shipping rates");
+    } finally {
+      setIsLoadingRates(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!formData.name || !formData.email) {
@@ -127,6 +197,10 @@ function CheckoutComponent() {
       toast.error("Please fill in your shipping address");
       return;
     }
+    if (deliveryMethod === "shipping" && !selectedShippingRate) {
+      toast.error("Please choose a shipping rate");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -135,6 +209,13 @@ function CheckoutComponent() {
         email: string;
         name: string;
         phone?: string;
+        selectedShippingRate?: {
+          amount: string;
+          objectId: string;
+          provider: string;
+          servicelevelName: string;
+          shipmentObjectId?: string;
+        };
         shippingAddress?: {
           address: string;
           city: string;
@@ -154,17 +235,18 @@ function CheckoutComponent() {
         email: formData.email,
         name: formData.name,
         phone: formData.phone || undefined,
+        selectedShippingRate: selectedShippingRate
+          ? {
+              amount: selectedShippingRate.amount,
+              objectId: selectedShippingRate.objectId,
+              provider: selectedShippingRate.provider,
+              servicelevelName: selectedShippingRate.servicelevel.name,
+              shipmentObjectId: selectedShippingRate.shipmentObjectId,
+            }
+          : undefined,
         shippingAddress:
           deliveryMethod === "shipping"
-            ? {
-                address: formData.address,
-                city: formData.city,
-                email: formData.email,
-                name: formData.name,
-                phone: formData.phone || undefined,
-                state: formData.state,
-                zip: formData.zip,
-              }
+            ? getShippingAddressPayload()
             : undefined,
       };
 
@@ -180,9 +262,12 @@ function CheckoutComponent() {
       setOrderNumber(result.orderNumber);
       setOrderComplete(true);
 
-      if (!session) {
-        clearGuestCart();
-      }
+      clearGuestCart();
+      setGuestItems([]);
+      await queryClient.invalidateQueries({ queryKey: ["cart"] });
+      await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await router.invalidate({ sync: true });
     } catch {
       toast.error("Failed to place order");
     } finally {
@@ -369,9 +454,11 @@ function CheckoutComponent() {
                   <Input
                     id="address"
                     value={formData.address}
-                    onChange={(e) =>
-                      setFormData({ ...formData, address: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, address: e.target.value });
+                      setShippingRates([]);
+                      setSelectedRateId("");
+                    }}
                     className="bg-background border-gold/10"
                   />
                 </div>
@@ -380,9 +467,11 @@ function CheckoutComponent() {
                   <Input
                     id="city"
                     value={formData.city}
-                    onChange={(e) =>
-                      setFormData({ ...formData, city: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, city: e.target.value });
+                      setShippingRates([]);
+                      setSelectedRateId("");
+                    }}
                     className="bg-background border-gold/10"
                   />
                 </div>
@@ -391,9 +480,11 @@ function CheckoutComponent() {
                   <Input
                     id="state"
                     value={formData.state}
-                    onChange={(e) =>
-                      setFormData({ ...formData, state: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, state: e.target.value });
+                      setShippingRates([]);
+                      setSelectedRateId("");
+                    }}
                     className="bg-background border-gold/10"
                   />
                 </div>
@@ -402,13 +493,58 @@ function CheckoutComponent() {
                   <Input
                     id="zip"
                     value={formData.zip}
-                    onChange={(e) =>
-                      setFormData({ ...formData, zip: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, zip: e.target.value });
+                      setSelectedRateId("");
+                      setShippingRates([]);
+                    }}
                     className="bg-background border-gold/10"
                   />
                 </div>
               </div>
+              <Button
+                variant="outline"
+                className="border-gold/20 text-gold hover:bg-gold/10"
+                disabled={isLoadingRates}
+                onClick={handleGetShippingRates}
+              >
+                {isLoadingRates ? "Checking Rates..." : "Check Shipping Rates"}
+              </Button>
+              {shippingRates.length > 0 && (
+                <RadioGroup
+                  value={selectedRateId}
+                  onValueChange={setSelectedRateId}
+                  className="space-y-2"
+                >
+                  {shippingRates.map((rate) => (
+                    <div
+                      key={rate.objectId}
+                      className={`flex items-center gap-3 rounded-lg border p-3 ${selectedRateId === rate.objectId ? "border-gold bg-gold/5" : "border-gold/10"}`}
+                    >
+                      <RadioGroupItem
+                        value={rate.objectId}
+                        id={`rate-${rate.objectId}`}
+                      />
+                      <Label
+                        htmlFor={`rate-${rate.objectId}`}
+                        className="flex flex-1 cursor-pointer items-center justify-between gap-3"
+                      >
+                        <span>
+                          <span className="block text-sm font-medium">
+                            {rate.provider} {rate.servicelevel.name}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {rate.durationTerms || "Delivery estimate varies"}
+                          </span>
+                        </span>
+                        <span className="font-mono text-sm text-gold">
+                          ${Number(rate.amount).toFixed(2)}
+                        </span>
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              )}
             </div>
           )}
 
@@ -495,7 +631,7 @@ function CheckoutComponent() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Shipping</span>
                 <span className="text-foreground">
-                  ${shippingCost.toFixed(2)}
+                  ${resolvedShippingCost.toFixed(2)}
                 </span>
               </div>
             </div>

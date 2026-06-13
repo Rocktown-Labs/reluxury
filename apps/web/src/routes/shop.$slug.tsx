@@ -108,6 +108,7 @@ function ProductDetailComponent() {
             size: selectedSize,
           },
         });
+        await queryClient.invalidateQueries({ queryKey: ["cart"] });
         await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
       } else {
         addToGuestCart({

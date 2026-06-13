@@ -2,11 +2,13 @@ import { Button } from "@reluxury/ui/components/button";
 import { Input } from "@reluxury/ui/components/input";
 import { Label } from "@reluxury/ui/components/label";
 import { useForm } from "@tanstack/react-form";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { mergeGuestCartIntoUserCart } from "@/functions/cart";
 import { authClient } from "@/lib/auth-client";
+import { clearGuestCart, getGuestCart } from "@/lib/guest-cart";
 import { queryClient } from "@/lib/query-client";
 
 import Loader from "./loader";
@@ -19,7 +21,22 @@ export default function SignInForm({
   const navigate = useNavigate({
     from: "/",
   });
+  const router = useRouter();
   const { isPending } = authClient.useSession();
+
+  const syncPostAuthState = async () => {
+    const guestCart = getGuestCart();
+    if (guestCart.length > 0) {
+      await mergeGuestCartIntoUserCart({ data: { items: guestCart } });
+      clearGuestCart();
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ["session"] });
+    await queryClient.invalidateQueries({ queryKey: ["cart"] });
+    await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    await router.invalidate({ sync: true });
+  };
 
   const form = useForm({
     defaultValues: {
@@ -36,11 +53,9 @@ export default function SignInForm({
           onError: (error) => {
             toast.error(error.error.message || error.error.statusText);
           },
-          onSuccess: () => {
-            queryClient.invalidateQueries({
-              queryKey: ["session"],
-            });
-            navigate({
+          onSuccess: async () => {
+            await syncPostAuthState();
+            await navigate({
               to: "/dashboard",
             });
             toast.success("Sign in successful");

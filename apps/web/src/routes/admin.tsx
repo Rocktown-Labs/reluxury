@@ -21,7 +21,14 @@ import {
 } from "@reluxury/ui/components/table";
 import { Textarea } from "@reluxury/ui/components/textarea";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  redirect,
+  Link,
+  Outlet,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Package,
@@ -43,6 +50,7 @@ import {
   Sparkles,
   Search,
   Tag,
+  Truck,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
@@ -73,6 +81,11 @@ import {
   adminUpdateFooterContact,
   adminCreateCategory,
   adminDeleteCategory,
+  adminUpdateCategory,
+  adminGetAbandonedCarts,
+  adminGetShippoSettings,
+  adminUpdateShippoApiKey,
+  adminClearShippoApiKey,
 } from "@/functions/admin";
 import { getUser } from "@/functions/get-user";
 import { getFooterContact, getCategories } from "@/functions/store";
@@ -84,10 +97,18 @@ import {
   adminAlterationsQueryOptions,
   adminPromotionsQueryOptions,
   adminCustomersQueryOptions,
+  adminAbandonedCartsQueryOptions,
+  adminShippoSettingsQueryOptions,
   footerContactQueryOptions,
   categoriesQueryOptions,
 } from "@/lib/queries";
 import { queryClient } from "@/lib/query-client";
+
+const LIVE_ADMIN_QUERY_OPTIONS = {
+  refetchOnMount: "always" as const,
+  refetchOnWindowFocus: true,
+  staleTime: 0,
+};
 
 function readFileAsBase64(file: File): Promise<string> {
   // oxlint-disable-next-line promise/avoid-new
@@ -120,8 +141,10 @@ export const Route = createFileRoute("/admin")({
       alterations,
       promotions,
       customers,
+      abandonedCarts,
       contact,
       categories,
+      shippoSettings,
     ] = await Promise.all([
       adminGetStats(),
       adminGetProducts(),
@@ -130,10 +153,13 @@ export const Route = createFileRoute("/admin")({
       adminGetAlterations(),
       adminGetPromotions(),
       adminGetCustomers(),
+      adminGetAbandonedCarts(),
       getFooterContact(),
       getCategories(),
+      adminGetShippoSettings(),
     ]);
     return {
+      abandonedCarts,
       alterations,
       categories,
       contact,
@@ -142,13 +168,27 @@ export const Route = createFileRoute("/admin")({
       orders,
       products,
       promotions,
+      shippoSettings,
       stats,
     };
   },
 });
 
 function AdminComponent() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+
+  if (pathname !== "/admin") {
+    return <Outlet />;
+  }
+
+  return <AdminDashboard />;
+}
+
+function AdminDashboard() {
   const loaderData = Route.useLoaderData();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [hasNewUpdates, setHasNewUpdates] = useState(false);
@@ -161,56 +201,84 @@ function AdminComponent() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    void queryClient.refetchQueries({ queryKey: ["admin"] });
+  }, [activeTab]);
+
   const handleRefreshData = async () => {
     setHasNewUpdates(false);
     toast.info("Refreshing administration database...");
+    await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    await queryClient.invalidateQueries({ queryKey: ["store"] });
     await queryClient.refetchQueries({ queryKey: ["admin"] });
+    await router.invalidate({ sync: true });
     toast.success("Database fully synchronized");
   };
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     ...adminStatsQueryOptions(),
     initialData: loaderData.stats,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: products, isLoading: productsLoading } = useQuery({
     ...adminProductsQueryOptions(),
     initialData: loaderData.products,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: orders, isLoading: ordersLoading } = useQuery({
     ...adminOrdersQueryOptions(),
     initialData: loaderData.orders,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: events, isLoading: eventsLoading } = useQuery({
     ...adminEventsQueryOptions(),
     initialData: loaderData.events,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: alterations, isLoading: alterationsLoading } = useQuery({
     ...adminAlterationsQueryOptions(),
     initialData: loaderData.alterations,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: promotions, isLoading: promotionsLoading } = useQuery({
     ...adminPromotionsQueryOptions(),
     initialData: loaderData.promotions,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: customers, isLoading: customersLoading } = useQuery({
     ...adminCustomersQueryOptions(),
     initialData: loaderData.customers,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
+  });
+
+  const { data: abandonedCarts, isLoading: abandonedCartsLoading } = useQuery({
+    ...adminAbandonedCartsQueryOptions(),
+    initialData: loaderData.abandonedCarts,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: contact, isLoading: contactLoading } = useQuery({
     ...footerContactQueryOptions(),
     initialData: loaderData.contact,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const { data: categories, isLoading: categoriesLoading } = useQuery({
     ...categoriesQueryOptions(),
     initialData: loaderData.categories,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
+  });
+
+  const { data: shippoSettings, isLoading: shippoSettingsLoading } = useQuery({
+    ...adminShippoSettingsQueryOptions(),
+    initialData: loaderData.shippoSettings,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
   const tabs = [
@@ -221,6 +289,7 @@ function AdminComponent() {
     { icon: ShoppingCart, label: "Orders", value: "orders" },
     { icon: Calendar, label: "Workshops", value: "events" },
     { icon: Scissors, label: "Alterations", value: "alterations" },
+    { icon: ShoppingCart, label: "Carts", value: "abandoned-carts" },
     { icon: Users, label: "Customers", value: "customers" },
     { icon: Megaphone, label: "Promotions", value: "promotions" },
     { icon: Settings, label: "Settings", value: "settings" },
@@ -365,6 +434,10 @@ function AdminComponent() {
             contact={contact}
             categories={categories}
             categoriesLoading={categoriesLoading}
+            abandonedCarts={abandonedCarts}
+            abandonedCartsLoading={abandonedCartsLoading}
+            shippoSettings={shippoSettings}
+            shippoSettingsLoading={shippoSettingsLoading}
           />
         </div>
       </div>
@@ -392,6 +465,10 @@ function AdminTabContent({
   contact,
   categories,
   categoriesLoading,
+  abandonedCarts,
+  abandonedCartsLoading,
+  shippoSettings,
+  shippoSettingsLoading,
 }: {
   activeTab: string;
   statsLoading: boolean;
@@ -412,6 +489,10 @@ function AdminTabContent({
   contact: any;
   categories: any;
   categoriesLoading: boolean;
+  abandonedCarts: any;
+  abandonedCartsLoading: boolean;
+  shippoSettings: any;
+  shippoSettingsLoading: boolean;
 }) {
   switch (activeTab) {
     case "dashboard": {
@@ -474,6 +555,13 @@ function AdminTabContent({
         <CustomersAdmin customers={customers} />
       );
     }
+    case "abandoned-carts": {
+      return abandonedCartsLoading ? (
+        <OrdersSkeleton />
+      ) : (
+        <AbandonedCartsAdmin carts={abandonedCarts} />
+      );
+    }
     case "promotions": {
       return promotionsLoading ? (
         <PromotionsSkeleton />
@@ -482,12 +570,12 @@ function AdminTabContent({
       );
     }
     case "settings": {
-      return contactLoading ? (
+      return contactLoading || shippoSettingsLoading ? (
         <div className="flex justify-center items-center py-12">
           <Loader2 className="h-8 w-8 text-gold animate-spin" />
         </div>
       ) : (
-        <SettingsAdmin contact={contact} />
+        <SettingsAdmin contact={contact} shippoSettings={shippoSettings} />
       );
     }
     default: {
@@ -511,6 +599,16 @@ function DashboardStats({
     { icon: Package, label: "Products Available", value: stats.totalProducts },
     { icon: Calendar, label: "Active Workshops", value: stats.activeEvents },
     { icon: ShoppingCart, label: "Pending Orders", value: stats.pendingOrders },
+    {
+      icon: ShoppingCart,
+      label: "Active Carts",
+      value: stats.abandonedCarts,
+    },
+    {
+      icon: LayoutDashboard,
+      label: "Cart Value",
+      value: `$${Number(stats.abandonedCartValue).toFixed(2)}`,
+    },
     {
       icon: Scissors,
       label: "Pending Alterations",
@@ -1376,6 +1474,7 @@ function ProductsAdmin({
 
 function CategoriesAdmin({ categories }: { categories: any[] }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [sortOrder, setSortOrder] = useState("0");
@@ -1383,32 +1482,52 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
 
-  const handleCreate = async () => {
+  const resetCategoryForm = () => {
+    setEditingCategory(null);
+    setName("");
+    setDescription("");
+    setSortOrder("0");
+    setIsActive(true);
+  };
+
+  const handleEditCategory = (category: any) => {
+    setEditingCategory(category);
+    setName(category.name);
+    setDescription(category.description ?? "");
+    setSortOrder(String(category.sortOrder ?? 0));
+    setIsActive(category.isActive);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveCategory = async () => {
     if (!name.trim()) {
       toast.error("Category name is required");
       return;
     }
     setIsSaving(true);
     try {
-      await adminCreateCategory({
-        data: {
-          description: description || undefined,
-          isActive,
-          name,
-          sortOrder: Number.parseInt(sortOrder, 10) || 0,
-        },
-      });
-      toast.success("Category created successfully");
+      const payload = {
+        description: description || null,
+        isActive,
+        name,
+        sortOrder: Number.parseInt(sortOrder, 10) || 0,
+      };
+      if (editingCategory) {
+        await adminUpdateCategory({
+          data: { id: editingCategory.id, ...payload },
+        });
+        toast.success("Category updated successfully");
+      } else {
+        await adminCreateCategory({ data: payload });
+        toast.success("Category created successfully");
+      }
       setIsModalOpen(false);
-      setName("");
-      setDescription("");
-      setSortOrder("0");
-      setIsActive(true);
+      resetCategoryForm();
       await queryClient.invalidateQueries({
         queryKey: categoriesQueryOptions().queryKey,
       });
     } catch {
-      toast.error("Failed to create category");
+      toast.error("Failed to save category");
     } finally {
       setIsSaving(false);
     }
@@ -1502,6 +1621,16 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
     }
   };
 
+  const getCategorySaveLabel = () => {
+    if (isSaving) {
+      return "Saving...";
+    }
+    if (editingCategory) {
+      return "Save Category";
+    }
+    return "Create Category";
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -1524,7 +1653,10 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
             Load Presets
           </Button>
           <Button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              resetCategoryForm();
+              setIsModalOpen(true);
+            }}
             className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2"
           >
             <Plus className="h-4 w-4" />
@@ -1586,14 +1718,24 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(cat.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-gold"
+                        onClick={() => handleEditCategory(cat)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDelete(cat.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -1606,14 +1748,14 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
         <DialogContent className="max-w-md bg-card border border-gold/25 p-6">
           <DialogHeader>
             <DialogTitle className="text-gold font-display font-light text-2xl">
-              Create New Category
+              {editingCategory ? "Edit Category" : "Create New Category"}
             </DialogTitle>
           </DialogHeader>
 
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleCreate();
+              handleSaveCategory();
             }}
             className="space-y-4 mt-2"
           >
@@ -1666,7 +1808,10 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  resetCategoryForm();
+                }}
                 className="border-gold/10 text-gold"
               >
                 Cancel
@@ -1676,7 +1821,7 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
                 className="bg-gold text-primary-foreground hover:bg-gold-dark"
                 disabled={isSaving}
               >
-                {isSaving ? "Creating..." : "Create Category"}
+                {getCategorySaveLabel()}
               </Button>
             </DialogFooter>
           </form>
@@ -2437,6 +2582,106 @@ function AlterationsAdmin({
   );
 }
 
+function AbandonedCartsAdmin({
+  carts,
+}: {
+  carts: Awaited<ReturnType<typeof adminGetAbandonedCarts>>;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const filteredCarts = carts.filter((cart) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      cart.customer.name.toLowerCase().includes(term) ||
+      cart.customer.email.toLowerCase().includes(term)
+    );
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-3 border-b border-gold/10">
+        <h2 className="font-display text-xl text-foreground">
+          Active Customer Carts
+        </h2>
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search carts..."
+            className="pl-9 border-gold/10"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gold/10 overflow-hidden bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-gold/10 hover:bg-transparent">
+              <TableHead className="text-gold">Customer</TableHead>
+              <TableHead className="text-gold">Items</TableHead>
+              <TableHead className="text-gold text-right">Cart Value</TableHead>
+              <TableHead className="text-gold">Last Activity</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredCarts.map((cart) => (
+              <TableRow key={cart.customer.id} className="border-gold/10">
+                <TableCell>
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">
+                      {cart.customer.name}
+                    </p>
+                    <p className="text-xs font-mono text-muted-foreground">
+                      {cart.customer.email}
+                    </p>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-2">
+                    <Badge variant="outline">{cart.itemCount} items</Badge>
+                    <div className="space-y-1">
+                      {cart.items.slice(0, 3).map((item) => (
+                        <p
+                          key={item.id}
+                          className="text-xs text-muted-foreground line-clamp-1"
+                        >
+                          {item.quantity}x {item.product.title}
+                          {item.size ? ` (${item.size})` : ""}
+                        </p>
+                      ))}
+                      {cart.items.length > 3 && (
+                        <p className="text-xs text-muted-foreground">
+                          +{cart.items.length - 3} more
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-mono font-semibold text-gold">
+                  ${cart.total.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {new Date(cart.lastUpdatedAt).toLocaleString()}
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredCarts.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="py-8 text-center text-sm text-muted-foreground"
+                >
+                  No active customer carts found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
 function CustomersAdmin({
   customers,
 }: {
@@ -2969,10 +3214,17 @@ function PromotionsAdmin({
   );
 }
 
-function SettingsAdmin({ contact }: { contact: any }) {
+function SettingsAdmin({
+  contact,
+  shippoSettings,
+}: {
+  contact: any;
+  shippoSettings: Awaited<ReturnType<typeof adminGetShippoSettings>>;
+}) {
   const [address, setAddress] = useState(contact?.address || "");
   const [phone, setPhone] = useState(contact?.phone || "");
   const [hours, setHours] = useState(contact?.hours || "");
+  const [shippoApiKey, setShippoApiKey] = useState("");
 
   const updateMutation = useMutation({
     mutationFn: adminUpdateFooterContact,
@@ -2987,12 +3239,47 @@ function SettingsAdmin({ contact }: { contact: any }) {
     },
   });
 
+  const updateShippoMutation = useMutation({
+    mutationFn: adminUpdateShippoApiKey,
+    onError: (err) => {
+      toast.error(err.message || "Failed to update Shippo API key");
+    },
+    onSuccess: async () => {
+      toast.success("Shippo API key saved for demo shipping rates");
+      setShippoApiKey("");
+      await queryClient.invalidateQueries({
+        queryKey: adminShippoSettingsQueryOptions().queryKey,
+      });
+    },
+  });
+
+  const clearShippoMutation = useMutation({
+    mutationFn: adminClearShippoApiKey,
+    onError: (err) => {
+      toast.error(err.message || "Failed to clear Shippo API key");
+    },
+    onSuccess: async () => {
+      toast.success("Shippo API key cleared");
+      await queryClient.invalidateQueries({
+        queryKey: adminShippoSettingsQueryOptions().queryKey,
+      });
+    },
+  });
+
   const handleSaveSettings = () => {
     if (!address || !phone || !hours) {
       toast.error("All settings fields are required");
       return;
     }
     updateMutation.mutate({ address, hours, phone });
+  };
+
+  const handleSaveShippoKey = () => {
+    if (!shippoApiKey.trim()) {
+      toast.error("Enter a Shippo API key first");
+      return;
+    }
+    updateShippoMutation.mutate({ data: { apiKey: shippoApiKey } });
   };
 
   return (
@@ -3047,6 +3334,51 @@ function SettingsAdmin({ contact }: { contact: any }) {
         >
           Save Boutique Information
         </Button>
+      </div>
+
+      <div className="max-w-2xl bg-card border border-gold/10 rounded-xl p-6 space-y-6">
+        <h3 className="font-display text-lg font-light text-gold flex items-center gap-2">
+          <Truck className="h-5 w-5 text-gold" /> Shippo Demo Shipping
+        </h3>
+
+        <div className="space-y-2">
+          <Label>Shippo API Key</Label>
+          <Input
+            value={shippoApiKey}
+            type="password"
+            onChange={(e: any) => setShippoApiKey(e.target.value)}
+            placeholder={
+              shippoSettings.configured
+                ? `Configured: ${shippoSettings.maskedKey}`
+                : "shippo_test_..."
+            }
+            className="border-gold/10 font-mono"
+          />
+          <p className="text-xs text-muted-foreground">
+            For the demo, this key is stored in admin settings. Production
+            should use the `SHIPPO_API_KEY` Worker secret instead.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            className="bg-gold text-primary-foreground hover:bg-gold-dark"
+            onClick={handleSaveShippoKey}
+            disabled={updateShippoMutation.isPending}
+          >
+            Save Shippo Key
+          </Button>
+          {shippoSettings.configured && (
+            <Button
+              variant="outline"
+              className="border-gold/20 text-gold hover:bg-gold/10"
+              onClick={() => clearShippoMutation.mutate()}
+              disabled={clearShippoMutation.isPending}
+            >
+              Clear Key
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

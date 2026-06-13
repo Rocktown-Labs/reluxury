@@ -11,6 +11,8 @@ import {
   adminGetAlterationById,
   adminGetEventById,
   adminGetCustomers,
+  adminGetAbandonedCarts,
+  adminGetShippoSettings,
 } from "@/functions/admin";
 import { getCart } from "@/functions/cart";
 import {
@@ -43,6 +45,7 @@ export const storeKeys = {
 };
 
 export const adminKeys = {
+  abandonedCarts: () => [...adminKeys.all, "abandonedCarts"] as const,
   all: ["admin"] as const,
   alteration: (id: string) => [...adminKeys.all, "alteration", id] as const,
   alterations: () => [...adminKeys.all, "alterations"] as const,
@@ -53,6 +56,7 @@ export const adminKeys = {
   orders: () => [...adminKeys.all, "orders"] as const,
   products: () => [...adminKeys.all, "products"] as const,
   promotions: () => [...adminKeys.all, "promotions"] as const,
+  shippoSettings: () => [...adminKeys.all, "shippoSettings"] as const,
   stats: () => [...adminKeys.all, "stats"] as const,
 };
 
@@ -203,4 +207,16 @@ export const adminCustomersQueryOptions = () =>
   queryOptions({
     queryFn: () => adminGetCustomers(),
     queryKey: adminKeys.customers(),
+  });
+
+export const adminAbandonedCartsQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetAbandonedCarts(),
+    queryKey: adminKeys.abandonedCarts(),
+  });
+
+export const adminShippoSettingsQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetShippoSettings(),
+    queryKey: adminKeys.shippoSettings(),
   });

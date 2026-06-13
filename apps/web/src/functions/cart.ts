@@ -1,7 +1,7 @@
 import { createDb } from "@reluxury/db";
-import { cartItems } from "@reluxury/db/schema";
+import { cartItems, products } from "@reluxury/db/schema";
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { authMiddleware } from "@/middleware/auth";
@@ -46,7 +46,7 @@ export const addToCart = createServerFn({ method: "POST" })
       where: and(
         eq(cartItems.userId, context.session.user.id),
         eq(cartItems.productId, data.productId),
-        data.size ? eq(cartItems.size, data.size) : undefined
+        data.size ? eq(cartItems.size, data.size) : isNull(cartItems.size)
       ),
     });
 
@@ -82,12 +82,24 @@ export const updateCartItem = createServerFn({ method: "POST" })
     }
     const db = createDb();
     if (data.quantity === 0) {
-      await db.delete(cartItems).where(eq(cartItems.id, data.itemId));
+      await db
+        .delete(cartItems)
+        .where(
+          and(
+            eq(cartItems.id, data.itemId),
+            eq(cartItems.userId, context.session.user.id)
+          )
+        );
     } else {
       await db
         .update(cartItems)
         .set({ quantity: data.quantity })
-        .where(eq(cartItems.id, data.itemId));
+        .where(
+          and(
+            eq(cartItems.id, data.itemId),
+            eq(cartItems.userId, context.session.user.id)
+          )
+        );
     }
     return { success: true };
   });
@@ -100,6 +112,79 @@ export const removeFromCart = createServerFn({ method: "POST" })
       throw new Error("Unauthorized");
     }
     const db = createDb();
-    await db.delete(cartItems).where(eq(cartItems.id, itemId));
+    await db
+      .delete(cartItems)
+      .where(
+        and(
+          eq(cartItems.id, itemId),
+          eq(cartItems.userId, context.session.user.id)
+        )
+      );
+    return { success: true };
+  });
+
+export const mergeGuestCartIntoUserCart = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      items: z
+        .array(
+          z.object({
+            productId: z.string(),
+            quantity: z.number().min(1),
+            size: z.string().nullable().optional(),
+          })
+        )
+        .max(100),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    if (!context.session) {
+      throw new Error("Unauthorized");
+    }
+
+    const db = createDb();
+    for (const item of data.items) {
+      const product = await db.query.products.findFirst({
+        where: and(
+          eq(products.id, item.productId),
+          eq(products.isActive, true)
+        ),
+      });
+
+      if (!product) {
+        continue;
+      }
+
+      const size = item.size ?? null;
+      const existing = await db.query.cartItems.findFirst({
+        where: and(
+          eq(cartItems.userId, context.session.user.id),
+          eq(cartItems.productId, item.productId),
+          size ? eq(cartItems.size, size) : isNull(cartItems.size)
+        ),
+      });
+
+      if (existing) {
+        await db
+          .update(cartItems)
+          .set({ quantity: existing.quantity + item.quantity })
+          .where(
+            and(
+              eq(cartItems.id, existing.id),
+              eq(cartItems.userId, context.session.user.id)
+            )
+          );
+      } else {
+        await db.insert(cartItems).values({
+          id: crypto.randomUUID(),
+          productId: item.productId,
+          quantity: item.quantity,
+          size,
+          userId: context.session.user.id,
+        });
+      }
+    }
+
     return { success: true };
   });

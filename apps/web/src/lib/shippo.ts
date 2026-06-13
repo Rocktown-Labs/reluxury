@@ -1,4 +1,7 @@
+import { createDb } from "@reluxury/db";
+import { storeSettings } from "@reluxury/db/schema";
 import { env } from "@reluxury/env/server";
+import { eq } from "drizzle-orm";
 
 export interface ShippoAddressInput {
   name: string;
@@ -22,6 +25,7 @@ export interface ShippoParcelInput {
 
 export interface ShippoRate {
   objectId: string;
+  shipmentObjectId?: string;
   amount: string;
   currency: string;
   provider: string;
@@ -48,6 +52,7 @@ export interface AddressValidationResult {
 }
 
 const SHIPPO_BASE_URL = "https://api.goshippo.com";
+const SHIPPO_API_KEY_SETTING = "shippo_api_key";
 
 // Store default sender address (Reluxury Boutique)
 export const DEFAULT_SENDER_ADDRESS: ShippoAddressInput = {
@@ -66,18 +71,32 @@ export const DEFAULT_SENDER_ADDRESS: ShippoAddressInput = {
  */
 class ShippoClient {
   // oxlint-disable-next-line class-methods-use-this
-  private get apiKey(): string | undefined {
+  private async getApiKey(): Promise<string | undefined> {
     // Access token from environment binding
     // In Workerd / Alchemy environment, env is a Proxy referencing process.env or wrangler vars
     try {
-      return (env as Record<string, string | undefined>).SHIPPO_API_KEY;
+      const boundKey = (env as Record<string, string | undefined>)
+        .SHIPPO_API_KEY;
+      if (boundKey) {
+        return boundKey;
+      }
+    } catch {
+      // Fall back to DB-managed demo key below.
+    }
+
+    try {
+      const db = createDb();
+      const setting = await db.query.storeSettings.findFirst({
+        where: eq(storeSettings.key, SHIPPO_API_KEY_SETTING),
+      });
+      return setting?.value || undefined;
     } catch {
       return undefined;
     }
   }
 
-  private get isMockMode(): boolean {
-    const key = this.apiKey;
+  private async isMockMode(): Promise<boolean> {
+    const key = await this.getApiKey();
     const isTest =
       typeof process !== "undefined" && process.env.VITEST === "true";
     return !key || isTest;
@@ -87,7 +106,7 @@ class ShippoClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const key = this.apiKey;
+    const key = await this.getApiKey();
     if (!key) {
       throw new Error("Shippo API Key is not configured.");
     }
@@ -126,7 +145,7 @@ class ShippoClient {
   async validateAddress(
     address: ShippoAddressInput
   ): Promise<AddressValidationResult> {
-    if (this.isMockMode) {
+    if (await this.isMockMode()) {
       // Simulate validation logic
       if (!address.street1 || !address.city || !address.state || !address.zip) {
         return {
@@ -181,7 +200,7 @@ class ShippoClient {
     parcel: ShippoParcelInput,
     fromAddress: ShippoAddressInput = DEFAULT_SENDER_ADDRESS
   ): Promise<ShippoRate[]> {
-    if (this.isMockMode) {
+    if (await this.isMockMode()) {
       // Generate realistic USPS rates based on parcel weight
       const weightOz = parcel.weight;
       // Base rate calculation
@@ -288,6 +307,7 @@ class ShippoClient {
         name: rate.servicelevel.name,
         token: rate.servicelevel.token,
       },
+      shipmentObjectId: res.object_id,
     }));
   }
 
@@ -295,7 +315,7 @@ class ShippoClient {
    * Purchases a shipping label using a rate object ID.
    */
   async purchaseLabel(rateObjectId: string): Promise<ShippoTransaction> {
-    if (this.isMockMode) {
+    if (await this.isMockMode()) {
       return {
         labelUrl: "https://docs.goshippo.com/assets/images/label.png", // Sample Shippo label URL
         messages: [],
@@ -338,7 +358,7 @@ class ShippoClient {
    * Requests a refund for a purchased label.
    */
   async refundLabel(transactionObjectId: string): Promise<{ status: string }> {
-    if (this.isMockMode) {
+    if (await this.isMockMode()) {
       return { status: "QUEUED" };
     }
 

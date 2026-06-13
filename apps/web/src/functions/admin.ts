@@ -9,6 +9,7 @@ import {
   user,
   storeSettings,
   categories,
+  cartItems,
 } from "@reluxury/db/schema";
 import { env } from "@reluxury/env/server";
 import { createServerFn } from "@tanstack/react-start";
@@ -41,6 +42,7 @@ const IMAGE_MIME_TYPES = new Set([
   "image/gif",
 ]);
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const SHIPPO_API_KEY_SETTING = "shippo_api_key";
 
 function decodeBase64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -710,6 +712,7 @@ export const adminGetStats = createServerFn({ method: "GET" })
       eventCount,
       pendingOrders,
       pendingAlterations,
+      abandonedCartRows,
     ] = await Promise.all([
       db.select({ count: count() }).from(orders),
       db
@@ -729,9 +732,18 @@ export const adminGetStats = createServerFn({ method: "GET" })
         .select({ count: count() })
         .from(alterationBookings)
         .where(eq(alterationBookings.status, "pending")),
+      db
+        .select({
+          count: sql<number>`count(distinct ${cartItems.userId})`,
+          total: sql<number>`sum(coalesce(${products.salePrice}, ${products.price}) * ${cartItems.quantity})`,
+        })
+        .from(cartItems)
+        .innerJoin(products, eq(cartItems.productId, products.id)),
     ]);
 
     return {
+      abandonedCartValue: abandonedCartRows[0]?.total ?? 0,
+      abandonedCarts: abandonedCartRows[0]?.count ?? 0,
       activeEvents: eventCount[0]?.count ?? 0,
       pendingAlterations: pendingAlterations[0]?.count ?? 0,
       pendingOrders: pendingOrders[0]?.count ?? 0,
@@ -797,6 +809,17 @@ export const adminGetCustomers = createServerFn({ method: "GET" })
       orderBy: [desc(user.createdAt)],
       with: {
         alterationBookings: true,
+        cartItems: {
+          with: {
+            product: {
+              with: {
+                images: {
+                  limit: 1,
+                },
+              },
+            },
+          },
+        },
         eventRegistrations: {
           with: {
             event: true,
@@ -805,6 +828,56 @@ export const adminGetCustomers = createServerFn({ method: "GET" })
         orders: true,
       },
     });
+  });
+
+export const adminGetAbandonedCarts = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const rows = await db.query.user.findMany({
+      orderBy: [desc(user.updatedAt)],
+      with: {
+        cartItems: {
+          with: {
+            product: {
+              with: {
+                images: {
+                  limit: 1,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return rows
+      .filter((customer) => customer.cartItems.length > 0)
+      .map((customer) => {
+        let total = 0;
+        let itemCount = 0;
+        let lastUpdatedAt = customer.cartItems[0]?.updatedAt ?? new Date(0);
+        for (const item of customer.cartItems) {
+          const price = item.product.salePrice ?? item.product.price;
+          total += price * item.quantity;
+          itemCount += item.quantity;
+          if (item.updatedAt > lastUpdatedAt) {
+            lastUpdatedAt = item.updatedAt;
+          }
+        }
+
+        return {
+          customer,
+          itemCount,
+          items: customer.cartItems,
+          lastUpdatedAt,
+          total,
+        };
+      })
+      .toSorted(
+        (a, b) => b.lastUpdatedAt.getTime() - a.lastUpdatedAt.getTime()
+      );
   });
 
 export const adminCreateAlteration = createServerFn({ method: "POST" })
@@ -877,6 +950,67 @@ export const adminUpdateFooterContact = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+export const adminGetShippoSettings = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const setting = await db.query.storeSettings.findFirst({
+      where: eq(storeSettings.key, SHIPPO_API_KEY_SETTING),
+    });
+    const value = setting?.value ?? "";
+    return {
+      configured: value.length > 0,
+      maskedKey: value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "",
+    };
+  });
+
+export const adminUpdateShippoApiKey = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      apiKey: z.string().min(1),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const apiKey = data.apiKey.trim();
+    if (!apiKey) {
+      throw new Error("Shippo API key is required");
+    }
+
+    const existing = await db.query.storeSettings.findFirst({
+      where: eq(storeSettings.key, SHIPPO_API_KEY_SETTING),
+    });
+
+    if (existing) {
+      await db
+        .update(storeSettings)
+        .set({ value: apiKey })
+        .where(eq(storeSettings.key, SHIPPO_API_KEY_SETTING));
+    } else {
+      await db.insert(storeSettings).values({
+        id: crypto.randomUUID(),
+        key: SHIPPO_API_KEY_SETTING,
+        value: apiKey,
+      });
+    }
+
+    return { success: true };
+  });
+
+export const adminClearShippoApiKey = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db
+      .delete(storeSettings)
+      .where(eq(storeSettings.key, SHIPPO_API_KEY_SETTING));
+    return { success: true };
+  });
+
 export const adminCreateCategory = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
@@ -912,6 +1046,25 @@ export const adminDeleteCategory = createServerFn({ method: "POST" })
     requireAdmin(context);
     const db = createDb();
     await db.delete(categories).where(eq(categories.id, id));
+    return { success: true };
+  });
+
+export const adminUpdateCategory = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      description: z.string().optional().nullable(),
+      id: z.string(),
+      isActive: z.boolean().optional(),
+      name: z.string().min(1).optional(),
+      sortOrder: z.number().optional(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const { id, ...update } = data;
+    await db.update(categories).set(update).where(eq(categories.id, id));
     return { success: true };
   });
 

@@ -25,9 +25,10 @@ import { queryClient } from "@/lib/query-client";
 export const Route = createFileRoute("/admin/alterations/$alterationId")({
   component: AdminAlterationDetailComponent,
   loader: ({ params }) =>
-    queryClient.ensureQueryData(
-      adminAlterationByIdQueryOptions(params.alterationId)
-    ),
+    queryClient.ensureQueryData({
+      ...adminAlterationByIdQueryOptions(params.alterationId),
+      revalidateIfStale: true,
+    }),
 });
 
 function AdminAlterationDetailComponent() {
@@ -39,6 +40,9 @@ function AdminAlterationDetailComponent() {
   const { data: booking, refetch } = useQuery({
     ...adminAlterationByIdQueryOptions(params.alterationId),
     initialData: loaderData,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const updateMutation = useMutation({
@@ -46,9 +50,10 @@ function AdminAlterationDetailComponent() {
     onError: (err) => {
       toast.error(err.message || "Failed to update alteration booking");
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Alteration booking updated successfully");
-      refetch();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await refetch();
     },
   });
 

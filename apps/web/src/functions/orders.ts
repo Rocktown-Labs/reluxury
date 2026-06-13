@@ -11,6 +11,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 
+import { shippo } from "@/lib/shippo";
+import type { ShippoRate } from "@/lib/shippo";
 import { authMiddleware } from "@/middleware/auth";
 
 const orderInputSchema = z.object({
@@ -27,6 +29,15 @@ const orderInputSchema = z.object({
     .optional(),
   name: z.string(),
   phone: z.string().optional(),
+  selectedShippingRate: z
+    .object({
+      amount: z.string(),
+      objectId: z.string(),
+      provider: z.string(),
+      servicelevelName: z.string(),
+      shipmentObjectId: z.string().optional(),
+    })
+    .optional(),
   shippingAddress: z
     .object({
       address: z.string(),
@@ -40,6 +51,120 @@ const orderInputSchema = z.object({
     .optional(),
 });
 
+const shippingRateInputSchema = z.object({
+  guestItems: orderInputSchema.shape.guestItems,
+  shippingAddress: orderInputSchema.shape.shippingAddress.unwrap(),
+});
+
+const DEFAULT_PACKAGE_DIMENSIONS = {
+  height: 4,
+  length: 14,
+  width: 10,
+} as const;
+const DEFAULT_ITEM_WEIGHT_OZ = 16;
+
+async function getCheckoutCart(
+  db: ReturnType<typeof createDb>,
+  userId: string | null,
+  guestItems?: z.infer<typeof orderInputSchema>["guestItems"]
+) {
+  const cart: {
+    productId: string;
+    quantity: number;
+    size: string | null;
+    product: typeof products.$inferSelect;
+  }[] = [];
+
+  if (userId) {
+    const dbCart = await db.query.cartItems.findMany({
+      where: eq(cartItems.userId, userId),
+      with: { product: true },
+    });
+    return dbCart.map((item) => ({
+      product: item.product,
+      productId: item.productId,
+      quantity: item.quantity,
+      size: item.size,
+    }));
+  }
+
+  if (!guestItems || guestItems.length === 0) {
+    return cart;
+  }
+
+  for (const guestItem of guestItems) {
+    const product = await db.query.products.findFirst({
+      where: and(
+        eq(products.id, guestItem.productId),
+        eq(products.isActive, true)
+      ),
+    });
+    if (!product) {
+      continue;
+    }
+    cart.push({
+      product,
+      productId: guestItem.productId,
+      quantity: guestItem.quantity,
+      size: guestItem.size ?? null,
+    });
+  }
+
+  return cart;
+}
+
+function getCartWeightOz(
+  cart: Awaited<ReturnType<typeof getCheckoutCart>>
+): number {
+  let totalWeight = 0;
+  for (const item of cart) {
+    totalWeight +=
+      (item.product.weight ?? DEFAULT_ITEM_WEIGHT_OZ) * item.quantity;
+  }
+  return Math.max(totalWeight, DEFAULT_ITEM_WEIGHT_OZ);
+}
+
+export const getCheckoutShippingRates = createServerFn({ method: "POST" })
+  .inputValidator(shippingRateInputSchema)
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const db = createDb();
+    const userId = context.session?.user.id ?? null;
+    const cart = await getCheckoutCart(db, userId, data.guestItems);
+
+    if (cart.length === 0) {
+      throw new Error("Cart is empty");
+    }
+
+    const address = {
+      city: data.shippingAddress.city,
+      country: "US",
+      email: data.shippingAddress.email,
+      name: data.shippingAddress.name,
+      phone: data.shippingAddress.phone,
+      state: data.shippingAddress.state,
+      street1: data.shippingAddress.address,
+      zip: data.shippingAddress.zip,
+    };
+
+    const validation = await shippo.validateAddress(address);
+
+    if (!validation.isValid) {
+      return {
+        messages: validation.messages,
+        rates: [] as ShippoRate[],
+        success: false,
+      };
+    }
+
+    const rates = await shippo.getRates(address, {
+      ...DEFAULT_PACKAGE_DIMENSIONS,
+      weight: getCartWeightOz(cart),
+    });
+
+    return { messages: [], rates, success: true };
+  });
+
 export const createOrder = createServerFn({ method: "POST" })
   .inputValidator(orderInputSchema)
   .middleware([authMiddleware])
@@ -47,44 +172,7 @@ export const createOrder = createServerFn({ method: "POST" })
     const db = createDb();
     const userId = context.session?.user.id ?? null;
 
-    // Build cart items
-    let cart: {
-      productId: string;
-      quantity: number;
-      size: string | null;
-      product: typeof products.$inferSelect;
-    }[] = [];
-
-    if (userId) {
-      const dbCart = await db.query.cartItems.findMany({
-        where: eq(cartItems.userId, userId),
-        with: { product: true },
-      });
-      cart = dbCart.map((item) => ({
-        product: item.product,
-        productId: item.productId,
-        quantity: item.quantity,
-        size: item.size,
-      }));
-    } else if (data.guestItems && data.guestItems.length > 0) {
-      for (const guestItem of data.guestItems) {
-        const product = await db.query.products.findFirst({
-          where: and(
-            eq(products.id, guestItem.productId),
-            eq(products.isActive, true)
-          ),
-        });
-        if (!product) {
-          continue;
-        }
-        cart.push({
-          product,
-          productId: guestItem.productId,
-          quantity: guestItem.quantity,
-          size: guestItem.size ?? null,
-        });
-      }
-    }
+    const cart = await getCheckoutCart(db, userId, data.guestItems);
 
     if (cart.length === 0) {
       throw new Error("Cart is empty");
@@ -96,23 +184,31 @@ export const createOrder = createServerFn({ method: "POST" })
       subtotal += price * item.quantity;
     }
 
-    const shippingCost = data.deliveryMethod === "shipping" ? 9.99 : 0;
+    const shippingCost =
+      data.deliveryMethod === "shipping"
+        ? Number(data.selectedShippingRate?.amount ?? 9.99)
+        : 0;
     const total = subtotal + shippingCost;
 
     const orderNumber = `RLX-${Date.now().toString(36).toUpperCase()}`;
     const orderId = crypto.randomUUID();
 
     await db.insert(orders).values({
+      carrier: data.selectedShippingRate?.provider ?? null,
       deliveryMethod: data.deliveryMethod,
       email: data.email,
       id: orderId,
       name: data.name,
+      notes: data.selectedShippingRate
+        ? `Selected shipping: ${data.selectedShippingRate.provider} ${data.selectedShippingRate.servicelevelName} (${data.selectedShippingRate.objectId})`
+        : null,
       orderNumber,
       phone: data.phone ?? null,
       shippingAddress: data.shippingAddress
         ? JSON.stringify(data.shippingAddress)
         : null,
       shippingCost,
+      shippoShipmentId: data.selectedShippingRate?.shipmentObjectId ?? null,
       status: "pending",
       subtotal,
       tax: 0,

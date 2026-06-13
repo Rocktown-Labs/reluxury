@@ -6,6 +6,10 @@
     "dev": "alchemy dev",
     "deploy": "alchemy deploy",
     "deploy:prod": "alchemy deploy --stage prod",
+    "deploy:prod:cloudflare": "alchemy deploy --stage prod --profile cloudflare",
+    "login:cloudflare": "alchemy login cloudflare --profile cloudflare",
+    "logout:cloudflare": "alchemy logout cloudflare --profile cloudflare --yes",
+    "relogin:cloudflare": "bun run logout:cloudflare && bun run login:cloudflare",
     "destroy": "alchemy destroy"
   },
   "dependencies": {

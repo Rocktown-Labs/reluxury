@@ -13,6 +13,7 @@ import {
   updateGuestCartItem,
   removeFromGuestCart,
 } from "@/lib/guest-cart";
+import { queryClient } from "@/lib/query-client";
 
 export const Route = createFileRoute("/cart")({
   component: CartComponent,
@@ -109,7 +110,9 @@ function CartComponent() {
     if (session) {
       try {
         await updateCartItem({ data: { itemId, quantity } });
-        await router.invalidate();
+        await queryClient.invalidateQueries({ queryKey: ["cart"] });
+        await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+        await router.invalidate({ sync: true });
       } catch {
         toast.error("Failed to update quantity");
       }
@@ -129,7 +132,9 @@ function CartComponent() {
     if (session) {
       try {
         await removeFromCart({ data: itemId });
-        await router.invalidate();
+        await queryClient.invalidateQueries({ queryKey: ["cart"] });
+        await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
+        await router.invalidate({ sync: true });
         toast.success("Item removed");
       } catch {
         toast.error("Failed to remove item");

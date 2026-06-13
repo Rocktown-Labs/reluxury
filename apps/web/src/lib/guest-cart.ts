@@ -85,4 +85,5 @@ export function removeFromGuestCart(
 
 export function clearGuestCart(): void {
   localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new Event("reluxury-cart-changed"));
 }

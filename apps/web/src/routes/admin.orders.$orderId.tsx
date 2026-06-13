@@ -47,7 +47,10 @@ import type { ShippoRate } from "@/lib/shippo";
 export const Route = createFileRoute("/admin/orders/$orderId")({
   component: AdminOrderDetailComponent,
   loader: ({ params }) =>
-    queryClient.ensureQueryData(adminOrderByIdQueryOptions(params.orderId)),
+    queryClient.ensureQueryData({
+      ...adminOrderByIdQueryOptions(params.orderId),
+      revalidateIfStale: true,
+    }),
 });
 
 const BOX_PRESETS = [
@@ -106,6 +109,9 @@ function AdminOrderDetailComponent() {
   const { data: order, refetch } = useQuery({
     ...adminOrderByIdQueryOptions(params.orderId),
     initialData: loaderData,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const handlePresetChange = (presetId: string) => {
@@ -123,9 +129,10 @@ function AdminOrderDetailComponent() {
     onError: (err) => {
       toast.error(err.message || "Failed to update order status");
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Order status updated successfully");
-      refetch();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await refetch();
     },
   });
 
@@ -154,10 +161,11 @@ function AdminOrderDetailComponent() {
     onError: (err) => {
       toast.error(err.message || "Failed to purchase label.");
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Label purchased successfully!");
       setRates([]);
-      refetch();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await refetch();
     },
   });
 
@@ -166,9 +174,10 @@ function AdminOrderDetailComponent() {
     onError: (err) => {
       toast.error(err.message || "Failed to update pickup status.");
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Order is ready for in-store pickup!");
-      refetch();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await refetch();
     },
   });
 
@@ -177,9 +186,10 @@ function AdminOrderDetailComponent() {
     onError: (err) => {
       toast.error(err.message || "Failed to refund label.");
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success(`Refund request submitted (Status: ${data.status})`);
-      refetch();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await refetch();
     },
   });
 

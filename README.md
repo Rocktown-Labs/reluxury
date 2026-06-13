@@ -76,7 +76,22 @@ If you want to add app-specific blocks instead of shared primitives, run the sha
 - Target: web + server
 - Dev: bun run dev
 - Deploy: bun run deploy
+- Direct prod deploy: bun run deploy:prod:direct
+- Cloudflare profile login: bun run alchemy:login:cloudflare
+- Cloudflare profile relogin: bun run alchemy:relogin:cloudflare
+- Cloudflare profile prod deploy: bun run deploy:prod:cloudflare
 - Destroy: bun run destroy
+
+Use `bun run deploy:prod:direct` from a locally authenticated machine when
+GitHub Actions does not have the production credentials. Keep production
+bindings outside source control, including `BETTER_AUTH_SECRET`,
+`SHIPPO_API_KEY`, and any Cloudflare account/D1 credentials required by
+Alchemy.
+
+If your Alchemy Cloudflare profile is named `cloudflare`, run
+`bun run alchemy:login:cloudflare` once, then `bun run deploy:prod:cloudflare`.
+If deploy fails with `invalid_grant` or an expired refresh token, run
+`bun run alchemy:relogin:cloudflare` and retry the deploy.
 
 For more details, see the guide on [Deploying to Cloudflare with Alchemy](https://www.better-t-stack.dev/docs/guides/cloudflare-alchemy).
 

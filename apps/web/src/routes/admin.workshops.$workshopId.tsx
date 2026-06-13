@@ -27,7 +27,10 @@ import { queryClient } from "@/lib/query-client";
 export const Route = createFileRoute("/admin/workshops/$workshopId")({
   component: AdminWorkshopDetailComponent,
   loader: ({ params }) =>
-    queryClient.ensureQueryData(adminEventByIdQueryOptions(params.workshopId)),
+    queryClient.ensureQueryData({
+      ...adminEventByIdQueryOptions(params.workshopId),
+      revalidateIfStale: true,
+    }),
 });
 
 function AdminWorkshopDetailComponent() {
@@ -37,6 +40,9 @@ function AdminWorkshopDetailComponent() {
   const { data: event } = useQuery({
     ...adminEventByIdQueryOptions(params.workshopId),
     initialData: loaderData,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   if (!event) {
