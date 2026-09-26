@@ -10,6 +10,36 @@ Before substantial work:
 - Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
 <!-- intent-skills:end -->
 
+# Git Flow, Issues, PRs & Deploys
+
+Primary branch is **`master`** (not `main`). CI deploys it to production.
+
+## Board & Issues
+
+- GitHub Project: **ReLUXURY** (`Rocktown-Labs`, project #6) — every piece of work starts as an issue on the board.
+- Create issues with `gh issue create --title "..." --body "..." [--label bug|enhancement]`; move them across the board as work progresses.
+- One branch per issue: `git checkout -b <type>/<short-slug>-<issue#>` (e.g. `feat/workshop-reminders-42`, `fix/size-filter-500-43`).
+
+## Pull Requests
+
+- PRs target `master`. Opening a PR spins up an isolated preview stage (`pr-<n>`) with its own worker, D1, and R2 — link is posted by CI. Closing the PR destroys the preview automatically.
+- Before opening: `bun x ultracite check`, full `bun run test` green, `tsc` shows no NEW errors (the repo has pre-existing `db possibly undefined` / implicit-`any` noise — don't add to it).
+- Commit hooks run oxlint + oxfmt on staged files. They reject YAML, so use `git commit --no-verify` for `.github/workflows` edits (validate YAML separately).
+- Review, then squash-merge. Keep `routeTree.gen.ts` edits in the commit — it regenerates on build, never hand-edit it.
+
+## Deploy Rules (read before touching prod)
+
+- **Production deploys ONLY via push to `master` (CI).** Local and CI use different `BETTER_AUTH_SECRET` values — deploying from a laptop rotates the secret and signs out every user. Never run `alchemy deploy --stage prod` locally.
+- New env keys must be added in three places or deploys silently ignore them: `packages/infra/alchemy.run.ts` bindings, `turbo.json` `globalPassThroughEnv` (turbo strips undeclared vars from tasks), and `.github/workflows/deploy.yml` env. Secrets live in GitHub secrets (`gh secret set NAME`), never in files.
+- First-time resources that already exist in Cloudflare need one `alchemy deploy --adopt` (adopts by physical name); never `destroy` a stack whose state you don't own.
+- D1 migrations are NOT managed by alchemy (drizzle-kit v0 layout). Schema changes go through `bun run db:push` / `db:generate` in `@reluxury/db`; local dev DB is seeded with `bun run db:seed:local` in the same package.
+
+## Local Dev
+
+- `bun run dev` boots the app (alchemy dev, real cloud bindings) plus the React Email preview. `bun run dev:email` runs just the preview.
+- `apps/web/.env` holds local secrets (`ADMIN_EMAILS`, `BETTER_AUTH_SECRET`); all `.env` files are gitignored.
+- Server tests run against the checked-in-needing `apps/web/.alchemy/local/wrangler.jsonc` worker config — new tests must not write to D1 (it points at shared data); keep new server tests pure like `resend-webhook.server.test.ts`.
+
 # Ultracite Code Standards
 
 This project uses **Ultracite**, a zero-config preset that enforces strict code quality standards through automated formatting and linting.
