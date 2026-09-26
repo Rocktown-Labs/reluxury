@@ -42,6 +42,10 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         rel: "icon",
         type: "image/jpeg",
       },
+      {
+        href: "https://reluxury.shop/",
+        rel: "canonical",
+      },
     ],
     meta: [
       {
@@ -56,7 +60,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       },
       {
         content:
-          "ReLUXURY Consignment & Alterations Boutique - Elevated resale fashion and expert alterations in Maumelle, AR. Shop pre-loved luxury or book our alteration services.",
+          "ReLUXURY Consignment & Alterations Boutique - Elevated resale fashion and expert alterations in Maumelle, AR. Shop pre-loved luxury, book alterations, and join free workshops.",
         name: "description",
       },
       {
@@ -69,7 +73,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       },
       {
         content:
-          "Elevated resale fashion and expert alterations in Maumelle, AR.",
+          "Elevated resale fashion, expert alterations, and free workshops in Maumelle, AR.",
         property: "og:description",
       },
       {
@@ -77,8 +81,20 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         property: "og:type",
       },
       {
-        content: "/logo.jpg",
+        content: "https://reluxury.shop/",
+        property: "og:url",
+      },
+      {
+        content: "https://reluxury.shop/logo.jpg",
         property: "og:image",
+      },
+      {
+        content: "ReLUXURY Boutique",
+        property: "og:site_name",
+      },
+      {
+        content: "en_US",
+        property: "og:locale",
       },
       {
         content: "summary_large_image",
@@ -90,12 +106,32 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       },
       {
         content:
-          "Elevated resale fashion and expert alterations in Maumelle, AR.",
+          "Elevated resale fashion, expert alterations, and free workshops in Maumelle, AR.",
         name: "twitter:description",
       },
       {
-        content: "/logo.jpg",
+        content: "https://reluxury.shop/logo.jpg",
         name: "twitter:image",
+      },
+    ],
+    scripts: [
+      {
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "ClothingStore",
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: "Maumelle",
+            addressRegion: "AR",
+            postalCode: "72113",
+            streetAddress: "14217 Corvallis Rd, Ste F",
+          },
+          image: "https://reluxury.shop/logo.jpg",
+          name: "ReLUXURY Consignment & Alterations Boutique",
+          telephone: "(501) 404-8696",
+          url: "https://reluxury.shop/",
+        }),
+        type: "application/ld+json",
       },
     ],
   }),

@@ -16,7 +16,7 @@
       "libsql": "0.5.22",
       "better-auth": "1.6.9",
       "@types/react-dom": "^19.2.3",
-      "alchemy": "^0.91.2"
+      "alchemy": "^2.0.0-beta.79"
     }
   },
   "type": "module",
@@ -31,10 +31,7 @@
     "deploy": "turbo -F @reluxury/infra deploy --",
     "deploy:prod": "turbo -F @reluxury/infra deploy -- --stage prod",
     "deploy:prod:direct": "bun --cwd packages/infra alchemy deploy --stage prod",
-    "deploy:prod:cloudflare": "bun --cwd packages/infra alchemy deploy --stage prod --profile cloudflare",
-    "alchemy:login:cloudflare": "bun --cwd packages/infra alchemy login cloudflare --profile cloudflare",
-    "alchemy:logout:cloudflare": "bun --cwd packages/infra alchemy logout cloudflare --profile cloudflare --yes",
-    "alchemy:relogin:cloudflare": "bun run alchemy:logout:cloudflare && bun run alchemy:login:cloudflare",
+    "alchemy:login:cloudflare": "bun --cwd packages/infra alchemy profile edit --profile cloudflare",
     "destroy": "turbo -F @reluxury/infra destroy --",
     "test": "turbo test",
     "check": "ultracite check",
@@ -43,6 +40,8 @@
   "dependencies": {
     "@reluxury/env": "workspace:*",
     "dotenv": "catalog:",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "zod": "catalog:"
   },
   "devDependencies": {

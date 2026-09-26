@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { mergeGuestCartIntoUserCart } from "@/functions/cart";
+import { getUser } from "@/functions/get-user";
 import { authClient } from "@/lib/auth-client";
 import { clearGuestCart, getGuestCart } from "@/lib/guest-cart";
 import { queryClient } from "@/lib/query-client";
@@ -57,9 +58,12 @@ export default function SignUpForm({
           },
           onSuccess: async () => {
             await syncPostAuthState();
-            await navigate({
-              to: "/dashboard",
-            });
+            const session = await getUser();
+            if (session?.user.role === "admin") {
+              await navigate({ to: "/admin" });
+            } else {
+              await navigate({ to: "/dashboard" });
+            }
             toast.success("Sign up successful");
           },
         }

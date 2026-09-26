@@ -7,6 +7,13 @@ import {
   products,
   eventRegistrations,
 } from "@reluxury/db/schema";
+import { env } from "@reluxury/env/server";
+import {
+  EMAIL_FROM,
+  orderConfirmationHtml,
+  sendViaResend,
+  workshopConfirmHtml,
+} from "@reluxury/transactional";
 import { createServerFn } from "@tanstack/react-start";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
@@ -178,6 +185,14 @@ export const createOrder = createServerFn({ method: "POST" })
       throw new Error("Cart is empty");
     }
 
+    // Workshop seats are tied to an account — no guest workshop checkout
+    if (
+      !userId &&
+      cart.some((item) => item.product.categoryId === "cat-workshops")
+    ) {
+      throw new Error("Sign in to register for workshops");
+    }
+
     let subtotal = 0;
     for (const item of cart) {
       const price = item.product.salePrice ?? item.product.price;
@@ -262,6 +277,48 @@ export const createOrder = createServerFn({ method: "POST" })
     // Clear DB cart for logged-in users
     if (userId) {
       await db.delete(cartItems).where(eq(cartItems.userId, userId));
+    }
+
+    // Transactional emails (non-blocking — order succeeds even if email fails)
+    try {
+      const itemsForEmail = cart.map((item) => ({
+        price: item.product.salePrice ?? item.product.price,
+        quantity: item.quantity,
+        title: item.product.title,
+      }));
+      await sendViaResend({
+        apiKey: env.RESEND_API_KEY ?? "",
+        from: EMAIL_FROM.orders,
+        html: orderConfirmationHtml({
+          customerName: data.name,
+          deliveryMethod: data.deliveryMethod,
+          items: itemsForEmail,
+          orderNumber,
+          total,
+        }),
+        subject: `Order ${orderNumber} confirmed — ReLUXURY`,
+        to: data.email,
+      });
+      // Workshop confirmation for free/paid workshop items (logged-in users)
+      if (userId) {
+        for (const item of cart) {
+          if (item.product.categoryId === "cat-workshops") {
+            await sendViaResend({
+              apiKey: env.RESEND_API_KEY ?? "",
+              from: EMAIL_FROM.workshops,
+              html: workshopConfirmHtml({
+                attendeeName: data.name,
+                startDate: "See dashboard for date/time",
+                title: item.product.title,
+              }),
+              subject: `You're registered — ${item.product.title}`,
+              to: data.email,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Transactional email failed", error);
     }
 
     return { orderId, orderNumber };

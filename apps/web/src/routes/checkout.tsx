@@ -31,6 +31,7 @@ export const Route = createFileRoute("/checkout")({
 interface CheckoutItem {
   id: string;
   product: {
+    categoryId: string | null;
     title: string;
     images: { url: string }[];
     salePrice: number | null;
@@ -93,6 +94,7 @@ function CheckoutComponent() {
           merged.push({
             id: `${item.productId}-${item.size ?? "no-size"}`,
             product: {
+              categoryId: product.categoryId,
               images: product.images ?? [],
               price: product.price,
               salePrice: product.salePrice,
@@ -188,6 +190,15 @@ function CheckoutComponent() {
   const handleSubmit = async () => {
     if (!formData.name || !formData.email) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+    // Workshop seats are tied to an account — guests must sign in first
+    const hasWorkshop = cartItems.some(
+      (item) => item.product.categoryId === "cat-workshops"
+    );
+    if (hasWorkshop && !session) {
+      toast.error("Please sign in to reserve your workshop seat");
+      await router.navigate({ to: "/login" });
       return;
     }
     if (

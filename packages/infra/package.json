@@ -6,14 +6,14 @@
     "dev": "alchemy dev",
     "deploy": "alchemy deploy",
     "deploy:prod": "alchemy deploy --stage prod",
-    "deploy:prod:cloudflare": "alchemy deploy --stage prod --profile cloudflare",
-    "login:cloudflare": "alchemy login cloudflare --profile cloudflare",
-    "logout:cloudflare": "alchemy logout cloudflare --profile cloudflare --yes",
-    "relogin:cloudflare": "bun run logout:cloudflare && bun run login:cloudflare",
+    "login:cloudflare": "alchemy profile edit --profile cloudflare",
     "destroy": "alchemy destroy"
   },
   "dependencies": {
-    "dotenv": "catalog:",
+    "@effect/platform-bun": "4.0.0-rc.117",
+    "@effect/platform-node": "4.0.0-rc.117",
+    "dotenv": "^17.4.2",
+    "effect": "4.0.0-rc.117",
     "zod": "catalog:"
   },
   "devDependencies": {

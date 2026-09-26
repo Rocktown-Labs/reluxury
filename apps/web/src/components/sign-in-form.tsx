@@ -3,10 +3,12 @@ import { Input } from "@reluxury/ui/components/input";
 import { Label } from "@reluxury/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import { mergeGuestCartIntoUserCart } from "@/functions/cart";
+import { getUser } from "@/functions/get-user";
 import { authClient } from "@/lib/auth-client";
 import { clearGuestCart, getGuestCart } from "@/lib/guest-cart";
 import { queryClient } from "@/lib/query-client";
@@ -23,6 +25,19 @@ export default function SignInForm({
   });
   const router = useRouter();
   const { isPending } = authClient.useSession();
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetSending, setResetSending] = useState(false);
+
+  const navigateByRole = async () => {
+    await syncPostAuthState();
+    const session = await getUser();
+    if (session?.user.role === "admin") {
+      await navigate({ to: "/admin" });
+    } else {
+      await navigate({ to: "/dashboard" });
+    }
+  };
 
   const syncPostAuthState = async () => {
     const guestCart = getGuestCart();
@@ -36,6 +51,39 @@ export default function SignInForm({
     await queryClient.invalidateQueries({ queryKey: ["cart-count"] });
     await queryClient.invalidateQueries({ queryKey: ["admin"] });
     await router.invalidate({ sync: true });
+  };
+
+  const handleForgotPassword = async () => {
+    if (!resetEmail) {
+      toast.error("Enter your email address first");
+      return;
+    }
+    setResetSending(true);
+    const { error } = await authClient.requestPasswordReset({
+      email: resetEmail,
+      redirectTo: "/reset-password",
+    });
+    setResetSending(false);
+    if (error) {
+      toast.error(error.message || "Could not send reset email");
+      return;
+    }
+    toast.success("If that email exists, a reset link is on its way");
+    setShowForgotPassword(false);
+  };
+
+  const handleGoogleSignIn = async () => {
+    await authClient.signIn.social(
+      { callbackURL: "/dashboard", provider: "google" },
+      {
+        onError: (error) => {
+          toast.error(error.error.message || "Google sign-in unavailable");
+        },
+        onSuccess: async () => {
+          await navigateByRole();
+        },
+      }
+    );
   };
 
   const form = useForm({
@@ -54,10 +102,7 @@ export default function SignInForm({
             toast.error(error.error.message || error.error.statusText);
           },
           onSuccess: async () => {
-            await syncPostAuthState();
-            await navigate({
-              to: "/dashboard",
-            });
+            await navigateByRole();
             toast.success("Sign in successful");
           },
         }
@@ -78,6 +123,15 @@ export default function SignInForm({
   return (
     <div className="mx-auto w-full mt-10 max-w-md p-6">
       <h1 className="mb-6 text-center text-3xl font-bold">Welcome Back</h1>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full mb-4"
+        onClick={handleGoogleSignIn}
+      >
+        Continue with Google
+      </Button>
 
       <form
         onSubmit={(e) => {
@@ -151,15 +205,46 @@ export default function SignInForm({
         </form.Subscribe>
       </form>
 
-      <div className="mt-4 text-center">
+      <div className="mt-4 text-center space-y-1">
         <Button
           variant="link"
-          onClick={onSwitchToSignUp}
+          onClick={() => setShowForgotPassword(!showForgotPassword)}
           className="text-indigo-600 hover:text-indigo-800"
         >
-          Need an account? Sign Up
+          Forgot password?
         </Button>
+        <div>
+          <Button
+            variant="link"
+            onClick={onSwitchToSignUp}
+            className="text-indigo-600 hover:text-indigo-800"
+          >
+            Need an account? Sign Up
+          </Button>
+        </div>
       </div>
+
+      {showForgotPassword && (
+        <div className="mt-4 space-y-3 rounded-lg border border-gold/10 p-4">
+          <Label htmlFor="reset-email">Email for reset link</Label>
+          <Input
+            id="reset-email"
+            type="email"
+            value={resetEmail}
+            onChange={(e) => setResetEmail(e.target.value)}
+            placeholder="you@example.com"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={resetSending}
+            onClick={handleForgotPassword}
+          >
+            {resetSending ? "Sending..." : "Send reset link"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

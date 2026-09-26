@@ -1,24 +1,21 @@
-import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { sentryTanstackStart } from "@sentry/tanstackstart-react/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import alchemy from "alchemy/cloudflare/tanstack-start";
 import { defineConfig } from "vite";
-const alchemyConfigPath = fileURLToPath(
-  new URL(".alchemy/local/wrangler.jsonc", import.meta.url)
-);
-const shouldUseAlchemy = existsSync(alchemyConfigPath);
+
 const cloudflareWorkersShimPath = fileURLToPath(
   new URL("../../packages/env/src/cloudflare-local.ts", import.meta.url)
 );
-const cloudflareWorkersAlias = shouldUseAlchemy
-  ? {}
-  : {
-      "cloudflare:workers": cloudflareWorkersShimPath,
-    };
+
+// `cloudflare:workers` only resolves inside workerd or alchemy-managed
+// builds (deploy/dev attach the real module). Plain vite/vitest runs need
+// the local shim instead — opt in via CF_WORKERS_SHIM=1 (set in the web
+// package scripts). Default is OFF so production bundles never ship the
+// shim (every binding, e.g. env.DB, would be undefined at runtime).
+const useShim = process.env.CF_WORKERS_SHIM === "1";
 
 export default defineConfig({
   plugins: [
@@ -30,10 +27,13 @@ export default defineConfig({
       project: "reluxury",
     }),
     viteReact(),
-    ...(shouldUseAlchemy ? [alchemy({ configPath: alchemyConfigPath })] : []),
   ],
   resolve: {
-    alias: cloudflareWorkersAlias,
+    alias: useShim
+      ? {
+          "cloudflare:workers": cloudflareWorkersShimPath,
+        }
+      : {},
     tsconfigPaths: true,
   },
   server: {
