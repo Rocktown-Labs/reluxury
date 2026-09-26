@@ -12,7 +12,7 @@ import {
 } from "@reluxury/ui/components/table";
 import { Textarea } from "@reluxury/ui/components/textarea";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ChevronLeft,
   Calendar,
@@ -29,12 +29,14 @@ import {
   RotateCcw,
   Calculator,
   CheckCircle,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import {
   adminUpdateOrderStatus,
+  adminDeleteOrder,
   adminGetShippoRates,
   adminPurchaseShippoLabel,
   adminMarkReadyForPickup,
@@ -93,6 +95,7 @@ const PACKAGE_WEIGHT_ID = "shipping-package-weight";
 function AdminOrderDetailComponent() {
   const params = Route.useParams();
   const loaderData = Route.useLoaderData();
+  const navigate = useNavigate();
   const [adminNotes, setAdminNotes] = useState("");
 
   // Shippo Package Details
@@ -135,6 +138,32 @@ function AdminOrderDetailComponent() {
       await refetch();
     },
   });
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (id: string) => adminDeleteOrder({ data: id }),
+    onError: (err) => {
+      toast.error(err.message || "Failed to delete order");
+    },
+    onSuccess: async () => {
+      toast.success("Order deleted");
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await navigate({ to: "/admin" });
+    },
+  });
+
+  const handleDeleteOrder = () => {
+    if (
+      // oxlint-disable-next-line no-alert
+      !confirm(
+        `Delete order ${order?.orderNumber ?? ""}? Only pending or cancelled orders can be deleted. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    if (order) {
+      deleteOrderMutation.mutate(order.id);
+    }
+  };
 
   const getRatesMutation = useMutation({
     mutationFn: adminGetShippoRates,
@@ -856,6 +885,25 @@ function AdminOrderDetailComponent() {
                 <p className="whitespace-pre-line text-muted-foreground leading-relaxed">
                   {order.adminNotes}
                 </p>
+              </div>
+            )}
+
+            {(order.status === "pending" || order.status === "cancelled") && (
+              <div className="p-3 border border-destructive/20 rounded-lg space-y-2">
+                <p className="text-[11px] font-semibold text-destructive uppercase tracking-wider">
+                  Danger Zone
+                </p>
+                <Button
+                  variant="destructive"
+                  className="w-full text-xs gap-2"
+                  disabled={deleteOrderMutation.isPending}
+                  onClick={handleDeleteOrder}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {deleteOrderMutation.isPending
+                    ? "Deleting..."
+                    : "Delete this order"}
+                </Button>
               </div>
             )}
           </div>

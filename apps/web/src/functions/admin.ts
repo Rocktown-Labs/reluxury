@@ -3,6 +3,7 @@ import {
   products,
   productImages,
   orders,
+  orderItems,
   events,
   alterationBookings,
   promotions,
@@ -518,6 +519,26 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
       .update(orders)
       .set({ adminNotes: data.adminNotes ?? undefined, status: data.status })
       .where(eq(orders.id, data.id));
+    return { success: true };
+  });
+
+export const adminDeleteOrder = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, id),
+    });
+    if (!order) {
+      throw new Error("Order not found");
+    }
+    if (!["pending", "cancelled"].includes(order.status)) {
+      throw new Error("Only pending or cancelled orders can be deleted");
+    }
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+    await db.delete(orders).where(eq(orders.id, id));
     return { success: true };
   });
 
