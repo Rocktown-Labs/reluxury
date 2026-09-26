@@ -3,10 +3,9 @@
 // layout (meta/_journal.json) that Alchemy hard-rejects.
 // Run after every `db:generate` (it is chained there automatically).
 import { mkdirSync, readdirSync, copyFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const root = dirname(fileURLToPath(import.meta.url));
+const root = import.meta.dirname;
 const source = join(root, "src/migrations");
 const target = join(root, "src/alchemy-migrations");
 
