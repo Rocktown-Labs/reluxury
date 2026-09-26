@@ -17,6 +17,7 @@ const PROD_DOMAIN = "reluxury.shop";
 export const Database = Cloudflare.D1.Database(
   "database",
   Stack.useSync((stack) => ({
+    migrations: "../../packages/db/src/alchemy-migrations",
     name: `reluxury-database-${stack.stage}`,
   }))
 );

@@ -32,7 +32,7 @@ Primary branch is **`master`** (not `main`). CI deploys it to production.
 - **Production deploys ONLY via push to `master` (CI).** Local and CI use different `BETTER_AUTH_SECRET` values — deploying from a laptop rotates the secret and signs out every user. Never run `alchemy deploy --stage prod` locally.
 - New env keys must be added in three places or deploys silently ignore them: `packages/infra/alchemy.run.ts` bindings, `turbo.json` `globalPassThroughEnv` (turbo strips undeclared vars from tasks), and `.github/workflows/deploy.yml` env. Secrets live in GitHub secrets (`gh secret set NAME`), never in files.
 - First-time resources that already exist in Cloudflare need one `alchemy deploy --adopt` (adopts by physical name); never `destroy` a stack whose state you don't own.
-- D1 migrations are NOT managed by alchemy (drizzle-kit v0 layout). Schema changes go through `bun run db:push` / `db:generate` in `@reluxury/db`; local dev DB is seeded with `bun run db:seed:local` in the same package.
+- D1 migrations ARE managed by alchemy from `packages/db/src/alchemy-migrations/` (flat `.sql` copies — drizzle-kit 0.31 generates the v0 layout alchemy rejects, so never point it at `src/migrations/` directly). After `db:generate`, run `bun run db:sync-migrations` in `@reluxury/db` (chained automatically). Applies on every deploy, previews included.
 
 ## Local Dev
 
