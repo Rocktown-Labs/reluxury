@@ -120,6 +120,7 @@ export const getProducts = createServerFn({ method: "GET" })
       minPrice: z.number().optional(),
       page: z.number().default(1),
       search: z.string().optional(),
+      size: z.string().optional(),
       sort: z.enum(["newest", "price_asc", "price_desc", "name"]).optional(),
     })
   )
@@ -147,6 +148,9 @@ export const getProducts = createServerFn({ method: "GET" })
     }
     if (data.search) {
       conditions.push(like(products.title, `%${data.search}%`));
+    }
+    if (data.size) {
+      conditions.push(like(products.sizes, `%"${data.size}"%`));
     }
 
     const whereClause = and(...conditions);
@@ -225,7 +229,43 @@ export const getProductBrands = createServerFn({ method: "GET" }).handler(
       .groupBy(products.brand);
     return results
       .map((r: { brand: string | null }) => r.brand)
-      .filter(Boolean);
+      .filter((brand): brand is string => typeof brand === "string");
+  }
+);
+
+export const getAvailableSizes = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const db = createDb();
+    const rows = await db
+      .select({ sizes: products.sizes })
+      .from(products)
+      .where(and(eq(products.isActive, true), catalogProductFilter));
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (!row.sizes) {
+        continue;
+      }
+      try {
+        const parsed: unknown = JSON.parse(row.sizes);
+        if (Array.isArray(parsed)) {
+          for (const size of parsed) {
+            if (typeof size === "string" && size.trim()) {
+              seen.add(size.trim());
+            }
+          }
+        }
+      } catch {
+        // Ignore non-JSON legacy values
+      }
+    }
+    return [...seen].toSorted((a, b) => {
+      const numA = Number.parseFloat(a);
+      const numB = Number.parseFloat(b);
+      if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+        return numA - numB;
+      }
+      return a.localeCompare(b);
+    });
   }
 );
 

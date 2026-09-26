@@ -92,6 +92,14 @@ export function createAuth() {
       }),
     ],
     secret: env.BETTER_AUTH_SECRET,
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 60 * 60 * 24 * 7,
+      },
+      expiresIn: 60 * 60 * 24 * 30,
+      updateAge: 60 * 60 * 24 * 7,
+    },
     socialProviders:
       googleClientId && googleClientSecret
         ? {

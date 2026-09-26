@@ -30,11 +30,13 @@ import {
   getProducts,
   getCategories,
   getProductBrands,
+  getAvailableSizes,
 } from "@/functions/store";
 import {
   productsQueryOptions,
   categoriesQueryOptions,
   productBrandsQueryOptions,
+  availableSizesQueryOptions,
 } from "@/lib/queries";
 
 const searchSchema = z.object({
@@ -44,13 +46,14 @@ const searchSchema = z.object({
   gender: z.string().optional(),
   page: z.number().optional(),
   search: z.string().optional(),
+  size: z.string().optional(),
   sort: z.enum(["newest", "price_asc", "price_desc", "name"]).optional(),
 });
 
 export const Route = createFileRoute("/shop")({
   component: ShopComponent,
   loader: async ({ deps }) => {
-    const [productsResult, categoriesList, brands] = await Promise.all([
+    const [productsResult, categoriesList, brands, sizes] = await Promise.all([
       getProducts({
         data: {
           brand: deps.brand,
@@ -60,13 +63,15 @@ export const Route = createFileRoute("/shop")({
           limit: 12,
           page: deps.page ?? 1,
           search: deps.search,
+          size: deps.size,
           sort: deps.sort,
         },
       }),
       getCategories(),
       getProductBrands(),
+      getAvailableSizes(),
     ]);
-    return { brands, categoriesList, productsResult };
+    return { brands, categoriesList, productsResult, sizes };
   },
   loaderDeps: ({ search }) => search,
   validateSearch: searchSchema,
@@ -89,6 +94,7 @@ function ShopComponent() {
       gender: search.gender,
       page: search.page,
       search: search.search,
+      size: search.size,
       sort: search.sort,
     }),
     initialData: loaderData.productsResult,
@@ -104,10 +110,15 @@ function ShopComponent() {
     initialData: loaderData.brands,
   });
 
+  const { data: sizes } = useQuery({
+    ...availableSizesQueryOptions(),
+    initialData: loaderData.sizes,
+  });
+
   const [localSearch, setLocalSearch] = useState(search.search ?? "");
 
   const updateFilter = useCallback(
-    (key: string, value: string | undefined) => {
+    (key: string, value?: string | undefined) => {
       navigate({
         search: (prev) => ({ ...prev, [key]: value, page: 1 }),
       });
@@ -121,6 +132,7 @@ function ShopComponent() {
     search.condition,
     search.brand,
     search.search,
+    search.size,
   ].filter(Boolean).length;
 
   if (pathname !== "/shop" && pathname !== "/shop/") {
@@ -197,6 +209,7 @@ function ShopComponent() {
                   search={search}
                   categories={categoriesList}
                   brands={brands}
+                  sizes={sizes}
                   onUpdateFilter={updateFilter}
                 />
               </SheetContent>
@@ -242,6 +255,12 @@ function ShopComponent() {
                 onRemove={() => updateFilter("search")}
               />
             )}
+            {search.size && (
+              <FilterBadge
+                label={`Size ${search.size}`}
+                onRemove={() => updateFilter("size")}
+              />
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -264,6 +283,7 @@ function ShopComponent() {
             search={search}
             categories={categoriesList}
             brands={brands}
+            sizes={sizes}
             onUpdateFilter={updateFilter}
           />
         </aside>
@@ -350,12 +370,14 @@ function FiltersPanel({
   search,
   categories,
   brands,
+  sizes,
   onUpdateFilter,
 }: {
   search: z.infer<typeof searchSchema>;
   categories: Awaited<ReturnType<typeof getCategories>>;
   brands: Awaited<ReturnType<typeof getProductBrands>>;
-  onUpdateFilter: (key: string, value: string | undefined) => void;
+  sizes: Awaited<ReturnType<typeof getAvailableSizes>>;
+  onUpdateFilter: (key: string, value?: string | undefined) => void;
 }) {
   return (
     <div className="space-y-8">
@@ -448,6 +470,32 @@ function FiltersPanel({
                 }
               >
                 {brand}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sizes.length > 0 && (
+        <div>
+          <h3 className="font-display text-lg text-foreground mb-4">Size</h3>
+          <div className="flex flex-wrap gap-2">
+            {sizes.map((size) => (
+              <button
+                key={size}
+                onClick={() =>
+                  onUpdateFilter(
+                    "size",
+                    search.size === size ? undefined : size
+                  )
+                }
+                className={`min-w-10 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                  search.size === size
+                    ? "border-gold bg-gold text-primary-foreground font-medium"
+                    : "border-gold/10 text-muted-foreground hover:border-gold/40 hover:text-foreground"
+                }`}
+              >
+                {size}
               </button>
             ))}
           </div>

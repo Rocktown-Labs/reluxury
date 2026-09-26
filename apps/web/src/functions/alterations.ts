@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 
+import { notifyAdmin } from "@/lib/admin-notify";
 import { authMiddleware } from "@/middleware/auth";
 
 export const createAlterationBooking = createServerFn({ method: "POST" })
@@ -32,6 +33,10 @@ export const createAlterationBooking = createServerFn({ method: "POST" })
       status: "pending",
       userId: context.session.user.id,
     });
+    await notifyAdmin(
+      `New tailoring request — ${data.serviceType}`,
+      `<div style="font-family:sans-serif"><h2>New tailoring request</h2><p>${context.session.user.email} requested <strong>${data.serviceType}</strong> for "${data.itemDescription}".</p><p>Preferred: ${data.preferredDate}${data.preferredTime ? ` at ${data.preferredTime}` : ""}.</p></div>`
+    );
     return { success: true };
   });
 

@@ -13,7 +13,17 @@ import {
 } from "@reluxury/db/schema";
 import { env } from "@reluxury/env/server";
 import { createServerFn } from "@tanstack/react-start";
-import { eq, desc, count, sql, isNull, ne, or } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  count,
+  sql,
+  isNull,
+  ne,
+  or,
+  gte,
+  inArray,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { shippo } from "@/lib/shippo";
@@ -319,6 +329,25 @@ export const adminDeleteProduct = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+export const adminBulkDeleteProducts = createServerFn({ method: "POST" })
+  .inputValidator(z.array(z.string()).min(1).max(200))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: ids }) => {
+    requireAdmin(context);
+    const db = createDb();
+    try {
+      await db
+        .delete(productImages)
+        .where(inArray(productImages.productId, ids));
+      await db.delete(products).where(inArray(products.id, ids));
+    } catch {
+      throw new Error(
+        "Some products are linked to orders and cannot be deleted"
+      );
+    }
+    return { deleted: ids.length };
+  });
+
 export const adminUploadProductImage = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
@@ -596,6 +625,18 @@ export const adminDeleteEvent = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+export const adminBulkDeleteEvents = createServerFn({ method: "POST" })
+  .inputValidator(z.array(z.string()).min(1).max(200))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: ids }) => {
+    requireAdmin(context);
+    const db = createDb();
+    await db.delete(productImages).where(inArray(productImages.productId, ids));
+    await db.delete(products).where(inArray(products.id, ids));
+    await db.delete(events).where(inArray(events.id, ids));
+    return { deleted: ids.length };
+  });
+
 // Alterations Admin
 export const adminGetAlterations = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -723,7 +764,9 @@ export const adminGetStats = createServerFn({ method: "GET" })
       db
         .select({ count: count() })
         .from(events)
-        .where(eq(events.isActive, true)),
+        .where(
+          and(eq(events.isActive, true), gte(events.startDate, new Date()))
+        ),
       db
         .select({ count: count() })
         .from(orders)

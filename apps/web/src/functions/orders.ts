@@ -18,6 +18,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 
+import { notifyAdmin } from "@/lib/admin-notify";
 import { shippo } from "@/lib/shippo";
 import type { ShippoRate } from "@/lib/shippo";
 import { authMiddleware } from "@/middleware/auth";
@@ -320,6 +321,11 @@ export const createOrder = createServerFn({ method: "POST" })
     } catch (error) {
       console.error("Transactional email failed", error);
     }
+
+    await notifyAdmin(
+      `New order ${orderNumber} — $${total.toFixed(2)}`,
+      `<div style="font-family:sans-serif"><h2>New order ${orderNumber}</h2><p>${data.name} (${data.email}) placed a ${data.deliveryMethod} order totaling $${total.toFixed(2)}.</p><p>${itemsForEmail.map((i) => `${i.quantity} × ${i.title}`).join("<br/>")}</p></div>`
+    );
 
     return { orderId, orderNumber };
   });

@@ -22,6 +22,7 @@ import {
   getProducts,
   getProductBySlug,
   getProductBrands,
+  getAvailableSizes,
   getEvents,
   getEventBySlug,
   getPromotions,
@@ -42,6 +43,7 @@ export const storeKeys = {
     [...storeKeys.all, "products", filters] as const,
   promotions: (location?: string) =>
     [...storeKeys.all, "promotions", location ?? "all"] as const,
+  sizes: () => [...storeKeys.all, "sizes"] as const,
 };
 
 export const adminKeys = {
@@ -90,7 +92,8 @@ export const productsQueryOptions = (filters: {
   gender?: string;
   page?: number;
   search?: string;
-  sort?: string;
+  size?: string;
+  sort?: "newest" | "price_asc" | "price_desc" | "name";
 }) =>
   queryOptions({
     queryFn: () =>
@@ -114,6 +117,12 @@ export const productBrandsQueryOptions = () =>
   queryOptions({
     queryFn: () => getProductBrands(),
     queryKey: storeKeys.brands(),
+  });
+
+export const availableSizesQueryOptions = () =>
+  queryOptions({
+    queryFn: () => getAvailableSizes(),
+    queryKey: storeKeys.sizes(),
   });
 
 export const eventsQueryOptions = () =>

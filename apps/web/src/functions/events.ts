@@ -1,9 +1,10 @@
 import { createDb } from "@reluxury/db";
-import { eventRegistrations } from "@reluxury/db/schema";
+import { eventRegistrations, events } from "@reluxury/db/schema";
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 
+import { notifyAdmin } from "@/lib/admin-notify";
 import { authMiddleware } from "@/middleware/auth";
 
 export const registerForEvent = createServerFn({ method: "POST" })
@@ -33,6 +34,14 @@ export const registerForEvent = createServerFn({ method: "POST" })
       status: "registered",
       userId: context.session.user.id,
     });
+
+    const event = await db.query.events.findFirst({
+      where: eq(events.id, eventId),
+    });
+    await notifyAdmin(
+      `New workshop registration — ${event?.title ?? eventId}`,
+      `<div style="font-family:sans-serif"><h2>New workshop registration</h2><p>${context.session.user.email} registered for <strong>${event?.title ?? eventId}</strong>.</p></div>`
+    );
 
     return { success: true };
   });

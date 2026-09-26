@@ -67,9 +67,11 @@ import {
   adminCreateProduct,
   adminUpdateProduct,
   adminDeleteProduct,
+  adminBulkDeleteProducts,
   adminUpdateOrderStatus,
   adminCreateEvent,
   adminDeleteEvent,
+  adminBulkDeleteEvents,
   adminUpdateAlteration,
   adminCreatePromotion,
   adminDeletePromotion,
@@ -194,6 +196,7 @@ function AdminDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const previousOrderCount = useRef<number | null>(null);
+  const previousAlterationCount = useRef<number | null>(null);
 
   useEffect(() => {
     void queryClient.refetchQueries({ queryKey: ["admin"] });
@@ -221,7 +224,7 @@ function AdminDashboard() {
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
-  // Real change detection: toast only when the order count actually grows
+  // Real change detection: toast only when counts actually grow
   useEffect(() => {
     if (!stats) {
       return;
@@ -234,6 +237,14 @@ function AdminDashboard() {
       toast.success("New order received — dashboard updated");
     }
     previousOrderCount.current = total;
+    const pending = stats.pendingAlterations ?? 0;
+    if (
+      previousAlterationCount.current !== null &&
+      pending > previousAlterationCount.current
+    ) {
+      toast.success("New tailoring request — dashboard updated");
+    }
+    previousAlterationCount.current = pending;
   }, [stats]);
 
   const { data: products, isLoading: productsLoading } = useQuery({
@@ -296,14 +307,38 @@ function AdminDashboard() {
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
+  const upcomingWorkshopCount =
+    events?.filter((event) => {
+      if (!event.isActive) {
+        return false;
+      }
+      const start = new Date(event.startDate).getTime();
+      return !Number.isNaN(start) && start >= Date.now();
+    }).length ?? 0;
+
   const tabs = [
     { icon: LayoutDashboard, label: "Dashboard", value: "dashboard" },
     { icon: Calendar, label: "Calendar", value: "calendar" },
     { icon: Package, label: "Products", value: "products" },
     { icon: Tag, label: "Categories", value: "categories" },
-    { icon: ShoppingCart, label: "Orders", value: "orders" },
-    { icon: Calendar, label: "Workshops", value: "events" },
-    { icon: Scissors, label: "Alterations", value: "alterations" },
+    {
+      badge: stats?.pendingOrders ?? 0,
+      icon: ShoppingCart,
+      label: "Orders",
+      value: "orders",
+    },
+    {
+      badge: upcomingWorkshopCount,
+      icon: Calendar,
+      label: "Workshops",
+      value: "events",
+    },
+    {
+      badge: stats?.pendingAlterations ?? 0,
+      icon: Scissors,
+      label: "Alterations",
+      value: "alterations",
+    },
     { icon: ShoppingCart, label: "Carts", value: "abandoned-carts" },
     { icon: Users, label: "Customers", value: "customers" },
     { icon: Megaphone, label: "Promotions", value: "promotions" },
@@ -383,7 +418,18 @@ function AdminDashboard() {
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  {tab.label}
+                  <span className="flex-1 text-left">{tab.label}</span>
+                  {"badge" in tab && tab.badge > 0 && (
+                    <span
+                      className={`min-w-5 h-5 px-1.5 rounded-full text-[10px] font-semibold flex items-center justify-center ${
+                        isActive
+                          ? "bg-primary-foreground/20 text-primary-foreground"
+                          : "bg-gold/15 text-gold"
+                      }`}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -440,6 +486,7 @@ function AdminDashboard() {
             abandonedCartsLoading={abandonedCartsLoading}
             shippoSettings={shippoSettings}
             shippoSettingsLoading={shippoSettingsLoading}
+            onNavigateTab={setActiveTab}
           />
         </div>
       </div>
@@ -471,6 +518,7 @@ function AdminTabContent({
   abandonedCartsLoading,
   shippoSettings,
   shippoSettingsLoading,
+  onNavigateTab,
 }: {
   activeTab: string;
   statsLoading: boolean;
@@ -495,13 +543,23 @@ function AdminTabContent({
   abandonedCartsLoading: boolean;
   shippoSettings: any;
   shippoSettingsLoading: boolean;
+  onNavigateTab: (tab: string) => void;
 }) {
   switch (activeTab) {
     case "dashboard": {
-      return statsLoading ? (
+      return statsLoading ||
+        ordersLoading ||
+        eventsLoading ||
+        alterationsLoading ? (
         <DashboardSkeleton />
       ) : (
-        <DashboardStats stats={stats} />
+        <DashboardStats
+          stats={stats}
+          orders={orders}
+          events={events}
+          alterations={alterations}
+          onNavigateTab={onNavigateTab}
+        />
       );
     }
     case "calendar": {
@@ -588,58 +646,259 @@ function AdminTabContent({
 
 function DashboardStats({
   stats,
+  orders,
+  events,
+  alterations,
+  onNavigateTab,
 }: {
   stats: Awaited<ReturnType<typeof adminGetStats>>;
+  orders: any[];
+  events: any[];
+  alterations: any[];
+  onNavigateTab: (tab: string) => void;
 }) {
-  const cards = [
-    { icon: ShoppingCart, label: "Total Orders", value: stats.totalOrders },
-    {
-      icon: LayoutDashboard,
-      label: "Total Revenue",
-      value: `$${Number(stats.totalRevenue).toFixed(2)}`,
-    },
-    { icon: Package, label: "Products Available", value: stats.totalProducts },
-    { icon: Calendar, label: "Active Workshops", value: stats.activeEvents },
-    { icon: ShoppingCart, label: "Pending Orders", value: stats.pendingOrders },
+  const now = Date.now();
+
+  const upcomingOrders = (orders ?? [])
+    .filter((order: any) =>
+      ["pending", "confirmed", "preparing"].includes(order.status)
+    )
+    .slice(0, 5);
+  const upcomingWorkshops = (events ?? [])
+    .filter((event: any) => {
+      if (!event.isActive) {
+        return false;
+      }
+      const start = new Date(event.startDate).getTime();
+      return !Number.isNaN(start) && start >= now;
+    })
+    .toSorted(
+      (a: any, b: any) =>
+        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+    )
+    .slice(0, 5);
+  const upcomingAlterations = (alterations ?? [])
+    .filter((booking: any) => ["pending", "approved"].includes(booking.status))
+    .slice(0, 5);
+
+  const kpis = [
     {
       icon: ShoppingCart,
-      label: "Active Carts",
-      value: stats.abandonedCarts,
+      label: "Pending Orders",
+      tab: "orders",
+      value: stats.pendingOrders,
     },
     {
-      icon: LayoutDashboard,
-      label: "Cart Value",
-      value: `$${Number(stats.abandonedCartValue).toFixed(2)}`,
+      icon: Calendar,
+      label: "Upcoming Workshops",
+      tab: "events",
+      value: upcomingWorkshops.length,
     },
     {
       icon: Scissors,
       label: "Pending Alterations",
+      tab: "alterations",
       value: stats.pendingAlterations,
+    },
+    {
+      icon: LayoutDashboard,
+      label: "Total Revenue",
+      tab: "orders",
+      value: `$${Number(stats.totalRevenue).toFixed(2)}`,
     },
   ];
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-display text-2xl font-light text-foreground pb-2 border-b border-gold/10">
-        Fulfillment Statistics
-      </h2>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map((card) => (
-          <div
-            key={card.label}
-            className="p-6 rounded-xl border border-gold/10 bg-card space-y-3 hover:border-gold/20 transition-all duration-200"
-          >
-            <card.icon className="h-5 w-5 text-gold" />
-            <div>
-              <p className="text-3xl font-light text-foreground">
-                {card.value}
-              </p>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mt-1">
-                {card.label}
-              </p>
-            </div>
+    <div className="space-y-6">
+      <div>
+        <h2 className="font-display text-2xl font-light text-foreground pb-2 border-b border-gold/10">
+          At a Glance
+        </h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          {kpis.map((card) => (
+            <button
+              key={card.label}
+              type="button"
+              onClick={() => onNavigateTab(card.tab)}
+              className="p-6 rounded-xl border border-gold/10 bg-card space-y-3 hover:border-gold/30 hover:bg-gold/5 transition-all duration-200 text-left"
+            >
+              <card.icon className="h-5 w-5 text-gold" />
+              <div>
+                <p className="text-3xl font-light text-foreground">
+                  {card.value}
+                </p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mt-1">
+                  {card.label}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="p-6 rounded-xl border border-gold/10 bg-card space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg text-foreground">
+              Upcoming Orders
+            </h3>
+            <Button
+              variant="link"
+              size="sm"
+              className="text-gold text-xs"
+              onClick={() => onNavigateTab("orders")}
+            >
+              View all
+            </Button>
           </div>
-        ))}
+          {upcomingOrders.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              All caught up — no orders awaiting fulfillment.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {upcomingOrders.map((order: any) => (
+                <li key={order.id}>
+                  <Link
+                    to="/admin/orders/$orderId"
+                    params={{ orderId: order.id }}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gold/10 px-3 py-2.5 hover:bg-gold/5 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {order.orderNumber} · {order.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        ${Number(order.total).toFixed(2)} ·{" "}
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 text-xs capitalize border-gold/20 text-gold"
+                    >
+                      {String(order.status).replaceAll("_", " ")}
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="p-6 rounded-xl border border-gold/10 bg-card space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg text-foreground">
+              Upcoming Workshops
+            </h3>
+            <Button
+              variant="link"
+              size="sm"
+              className="text-gold text-xs"
+              onClick={() => onNavigateTab("events")}
+            >
+              View all
+            </Button>
+          </div>
+          {upcomingWorkshops.length === 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No upcoming workshops scheduled.
+              </p>
+              <Button
+                size="sm"
+                className="bg-gold text-primary-foreground hover:bg-gold-dark"
+                onClick={() => onNavigateTab("events")}
+              >
+                <Plus className="h-4 w-4 mr-1.5" /> Create workshop
+              </Button>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {upcomingWorkshops.map((event: any) => {
+                const registered = event.registrations?.length ?? 0;
+                return (
+                  <li key={event.id}>
+                    <Link
+                      to="/admin/workshops/$workshopId"
+                      params={{ workshopId: event.id }}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-gold/10 px-3 py-2.5 hover:bg-gold/5 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {event.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(event.startDate).toLocaleDateString()} ·{" "}
+                          {registered}
+                          {event.capacity ? `/${event.capacity}` : ""}{" "}
+                          registered
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="shrink-0 text-xs border-gold/20 text-gold"
+                      >
+                        {event.price > 0
+                          ? `$${Number(event.price).toFixed(2)}`
+                          : "Free"}
+                      </Badge>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="p-6 rounded-xl border border-gold/10 bg-card space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg text-foreground">
+              Upcoming Tailoring
+            </h3>
+            <Button
+              variant="link"
+              size="sm"
+              className="text-gold text-xs"
+              onClick={() => onNavigateTab("alterations")}
+            >
+              View all
+            </Button>
+          </div>
+          {upcomingAlterations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No tailoring appointments awaiting review.
+            </p>
+          ) : (
+            <ul className="grid sm:grid-cols-2 gap-3">
+              {upcomingAlterations.map((booking: any) => (
+                <li key={booking.id}>
+                  <Link
+                    to="/admin/alterations/$alterationId"
+                    params={{ alterationId: booking.id }}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gold/10 px-3 py-2.5 hover:bg-gold/5 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {booking.serviceType}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(booking.preferredDate).toLocaleDateString()} ·{" "}
+                        {booking.user?.name ?? booking.user?.email ?? "Guest"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 text-xs capitalize border-gold/20 text-gold"
+                    >
+                      {booking.status}
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1063,28 +1322,88 @@ function ProductsAdmin({
     }
   };
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.length === products.length ? [] : products.map((p: any) => p.id)
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (
+      // oxlint-disable-next-line no-alert
+      !confirm(
+        `Delete ${selectedIds.length} selected products? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await adminBulkDeleteProducts({ data: selectedIds });
+      setSelectedIds([]);
+      await queryClient.invalidateQueries({
+        queryKey: adminProductsQueryOptions().queryKey,
+      });
+      toast.success("Selected products deleted");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete products"
+      );
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center pb-3 border-b border-gold/10">
         <h2 className="font-display text-xl text-foreground">
           Products Portfolio
         </h2>
-        <Button
-          size="sm"
-          className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2"
-          onClick={() => {
-            resetForm();
-            setIsModalOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Add Product
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="gap-2"
+              onClick={handleBulkDelete}
+            >
+              <Trash2 className="h-4 w-4" /> Delete {selectedIds.length}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2"
+            onClick={() => {
+              resetForm();
+              setIsModalOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" /> Add Product
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-xl border border-gold/10 overflow-hidden bg-card">
         <Table>
           <TableHeader>
             <TableRow className="border-gold/10 hover:bg-transparent">
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Select all products"
+                  checked={
+                    products.length > 0 &&
+                    selectedIds.length === products.length
+                  }
+                  onChange={toggleSelectAll}
+                />
+              </TableHead>
               <TableHead className="text-gold">Product</TableHead>
               <TableHead className="text-gold">SKU</TableHead>
               <TableHead className="text-gold">Condition</TableHead>
@@ -1099,6 +1418,14 @@ function ProductsAdmin({
                 key={product.id}
                 className="border-gold/10 hover:bg-gold/5"
               >
+                <TableCell className="w-10">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${product.title}`}
+                    checked={selectedIds.includes(product.id)}
+                    onChange={() => toggleSelect(product.id)}
+                  />
+                </TableCell>
                 <TableCell className="font-medium flex items-center gap-3">
                   <div className="w-10 h-10 rounded bg-gold/5 overflow-hidden shrink-0 border border-gold/10 flex items-center justify-center">
                     {product.images?.[0] ? (
@@ -2018,25 +2345,84 @@ function EventsAdmin({
     }
   };
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.length === events.length ? [] : events.map((e: any) => e.id)
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (
+      // oxlint-disable-next-line no-alert
+      !confirm(
+        `Delete ${selectedIds.length} selected workshops? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await adminBulkDeleteEvents({ data: selectedIds });
+      setSelectedIds([]);
+      await queryClient.invalidateQueries({
+        queryKey: adminEventsQueryOptions().queryKey,
+      });
+      toast.success("Selected workshops deleted");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete workshops"
+      );
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center pb-3 border-b border-gold/10">
         <h2 className="font-display text-xl text-foreground">
           Workshops & Classes
         </h2>
-        <Button
-          size="sm"
-          className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2"
-          onClick={() => setIsModalOpen(true)}
-        >
-          <Plus className="h-4 w-4" /> Add Workshop
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="gap-2"
+              onClick={handleBulkDelete}
+            >
+              <Trash2 className="h-4 w-4" /> Delete {selectedIds.length}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            className="bg-gold text-primary-foreground hover:bg-gold-dark gap-2"
+            onClick={() => setIsModalOpen(true)}
+          >
+            <Plus className="h-4 w-4" /> Add Workshop
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-xl border border-gold/10 overflow-hidden bg-card">
         <Table>
           <TableHeader>
             <TableRow className="border-gold/10 hover:bg-transparent">
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Select all workshops"
+                  checked={
+                    events.length > 0 && selectedIds.length === events.length
+                  }
+                  onChange={toggleSelectAll}
+                />
+              </TableHead>
               <TableHead className="text-gold">Workshop Title</TableHead>
               <TableHead className="text-gold">Start Date</TableHead>
               <TableHead className="text-gold text-center">
@@ -2055,6 +2441,14 @@ function EventsAdmin({
                 key={event.id}
                 className="border-gold/10 hover:bg-gold/5"
               >
+                <TableCell className="w-10">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${event.title}`}
+                    checked={selectedIds.includes(event.id)}
+                    onChange={() => toggleSelect(event.id)}
+                  />
+                </TableCell>
                 <TableCell className="font-medium text-sm">
                   <Link
                     to="/admin/workshops/$workshopId"
