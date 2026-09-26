@@ -1,4 +1,4 @@
-import { createDb } from "@reluxury/db";
+import { createDb, readBusinessContact } from "@reluxury/db";
 import {
   categories,
   events,
@@ -303,10 +303,6 @@ export const getPromotions = createServerFn({ method: "GET" })
     });
   });
 
-export {
-  readBusinessContact,
-  DEFAULT_BUSINESS_CONTACT,
-} from "@reluxury/db";
 export type { BusinessContact } from "@reluxury/db";
 
 export const getFooterContact = createServerFn({ method: "GET" }).handler(
