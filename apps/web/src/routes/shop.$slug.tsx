@@ -306,24 +306,24 @@ function ProductDetailComponent() {
           </div>
 
           {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+          <div className="flex flex-row gap-3 pt-4">
             <Button
               size="lg"
-              className="flex-1 bg-gold text-primary-foreground hover:bg-gold-dark gap-2"
+              className="flex-1 min-w-0 bg-gold text-primary-foreground hover:bg-gold-dark gap-2"
               disabled={isAdding || product.quantity === 0}
               onClick={handleAddToCart}
             >
-              <ShoppingBag className="h-4 w-4" />
-              {buttonText}
+              <ShoppingBag className="h-4 w-4 shrink-0" />
+              <span className="truncate">{buttonText}</span>
             </Button>
-            <Link to="/alterations" className="flex-1 sm:flex-initial">
+            <Link to="/alterations" className="flex-1 min-w-0">
               <Button
                 size="lg"
                 variant="outline"
                 className="w-full border-gold/20 text-gold hover:bg-gold/10 gap-2"
               >
-                <Scissors className="h-4 w-4" />
-                Book Alteration
+                <Scissors className="h-4 w-4 shrink-0" />
+                <span className="truncate">Book Alteration</span>
               </Button>
             </Link>
           </div>

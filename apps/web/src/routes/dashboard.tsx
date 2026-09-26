@@ -62,7 +62,7 @@ function DashboardComponent() {
   };
 
   return (
-    <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-8">
+    <div className="container mx-auto max-w-7xl px-4 lg:px-8 pt-8 pb-28 sm:py-8">
       <div className="space-y-2 mb-8">
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
           Welcome back
@@ -82,7 +82,7 @@ function DashboardComponent() {
           })
         }
       >
-        <TabsList className="bg-card border border-gold/10 mb-8">
+        <TabsList className="bg-card border border-gold/10 mb-8 hidden sm:inline-flex">
           <TabsTrigger value="orders" className="gap-2">
             <Package className="h-4 w-4" />
             Orders ({orders.length})
@@ -100,6 +100,69 @@ function DashboardComponent() {
             Profile
           </TabsTrigger>
         </TabsList>
+
+        {/* Native-style bottom tab bar (mobile only) */}
+        <nav
+          aria-label="Account sections"
+          className="fixed bottom-0 inset-x-0 z-40 border-t border-gold/10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:hidden"
+        >
+          <div className="grid grid-cols-4 pb-[env(safe-area-inset-bottom)]">
+            {(
+              [
+                {
+                  count: orders.length,
+                  icon: Package,
+                  label: "Orders",
+                  value: "orders",
+                },
+                {
+                  count: bookings.length,
+                  icon: Scissors,
+                  label: "Alterations",
+                  value: "bookings",
+                },
+                {
+                  count: registrations.length,
+                  icon: Calendar,
+                  label: "Workshops",
+                  value: "events",
+                },
+                { count: null, icon: User, label: "Profile", value: "profile" },
+              ] as const
+            ).map((item) => {
+              const isActive = (tab ?? "orders") === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() =>
+                    navigate({
+                      search: {
+                        tab: item.value,
+                      },
+                    })
+                  }
+                  className={`relative flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors ${
+                    isActive ? "text-gold" : "text-muted-foreground"
+                  }`}
+                >
+                  {isActive && (
+                    <span className="absolute top-0 h-0.5 w-10 rounded-full bg-gold" />
+                  )}
+                  <span className="relative">
+                    <item.icon className="h-5 w-5" />
+                    {item.count !== null && item.count > 0 && (
+                      <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-0.5 rounded-full bg-gold text-[9px] font-semibold text-primary-foreground flex items-center justify-center">
+                        {item.count}
+                      </span>
+                    )}
+                  </span>
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
 
         <TabsContent value="orders" className="space-y-4">
           {orders.length === 0 ? (
