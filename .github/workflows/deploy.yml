@@ -38,7 +38,7 @@ jobs:
           EOF
 
       - name: "Deploy"
-        run: "bun run deploy -- --stage ${{ env.STAGE }}"
+        run: "bun run deploy -- --stage ${{ env.STAGE }} --yes"
         env:
           ALCHEMY_PASSWORD: "${{ secrets.ALCHEMY_PASSWORD }}"
           ALCHEMY_STATE_TOKEN: "${{ secrets.ALCHEMY_STATE_TOKEN }}"
