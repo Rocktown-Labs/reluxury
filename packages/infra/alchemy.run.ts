@@ -74,7 +74,7 @@ export const Web = Cloudflare.Website.Vite(
           Config.withDefault(Redacted.make(""))
         ),
       },
-      name: "reluxury-web",
+      name: isProd ? "reluxury-web" : `reluxury-web-${stack.stage}`,
       observability: {
         enabled: true,
       },
