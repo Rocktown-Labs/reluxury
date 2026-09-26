@@ -22,7 +22,7 @@ Primary branch is **`master`** (not `main`). CI deploys it to production.
 
 ## Pull Requests
 
-- PRs target `master`. Opening a PR spins up an isolated preview stage (`pr-<n>`) with its own worker, D1, and R2 — link is posted by CI. Closing the PR destroys the preview automatically.
+- PRs target `master`. Opening a PR spins up an isolated preview stage (`pr-<n>`) with its own worker, D1, and R2 — grab the URL from the CI run output. Closing the PR destroys the preview automatically.
 - Before opening: `bun x ultracite check`, full `bun run test` green, `tsc` shows no NEW errors (the repo has pre-existing `db possibly undefined` / implicit-`any` noise — don't add to it).
 - Commit hooks run oxlint + oxfmt on staged files. They reject YAML, so use `git commit --no-verify` for `.github/workflows` edits (validate YAML separately).
 - Review, then squash-merge. Keep `routeTree.gen.ts` edits in the commit — it regenerates on build, never hand-edit it.
