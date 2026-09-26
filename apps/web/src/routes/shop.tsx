@@ -46,7 +46,7 @@ const searchSchema = z.object({
   gender: z.string().optional(),
   page: z.number().optional(),
   search: z.string().optional(),
-  size: z.string().optional(),
+  size: z.coerce.string().optional(),
   sort: z.enum(["newest", "price_asc", "price_desc", "name"]).optional(),
 });
 
