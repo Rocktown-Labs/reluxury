@@ -61,6 +61,15 @@ export function welcomeHtml(props: { business?: EmailBusinessInfo; name: string 
   return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Welcome, ${props.name}!</h1><p>Thanks for joining — shop pre-loved luxury, book alterations, and grab a seat in our free workshops.</p><p><a href="https://reluxury.shop/shop">Start shopping</a> · <a href="https://reluxury.shop/events">Browse workshops</a></p>${businessFooter(props.business)}</div></div>`;
 }
 
+export function staffInvitationHtml(props: {
+  business?: EmailBusinessInfo;
+  inviteUrl: string;
+  inviterName: string;
+  roleTitle: string;
+}) {
+  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Join the ReLUXURY team</h1><p>${props.inviterName} has invited you to join ReLUXURY as <strong>${props.roleTitle}</strong>.</p><p><a href="${props.inviteUrl}">Accept invitation</a></p><p style="color:#6b6259">This link expires in 7 days. Sign in (or create your account) with the invited email address first.</p>${businessFooter(props.business)}</div></div>`;
+}
+
 export function tailoringBookingHtml(props: {
   business?: EmailBusinessInfo;
   customerName: string;

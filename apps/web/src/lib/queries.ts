@@ -17,6 +17,11 @@ import {
 } from "@/functions/admin";
 import { getCart } from "@/functions/cart";
 import {
+  adminGetAuditLog,
+  adminGetMyStaffContext,
+  adminGetStaffList,
+} from "@/functions/staff";
+import {
   getCategories,
   getFeaturedProducts,
   getNewArrivals,
@@ -60,6 +65,9 @@ export const adminKeys = {
   products: () => [...adminKeys.all, "products"] as const,
   promotions: () => [...adminKeys.all, "promotions"] as const,
   shippoSettings: () => [...adminKeys.all, "shippoSettings"] as const,
+  staff: () => [...adminKeys.all, "staff"] as const,
+  staffAudit: () => [...adminKeys.all, "audit"] as const,
+  staffMe: () => [...adminKeys.all, "staffMe"] as const,
   stats: () => [...adminKeys.all, "stats"] as const,
 };
 
@@ -237,4 +245,22 @@ export const adminBusinessSetupQueryOptions = () =>
   queryOptions({
     queryFn: () => adminGetBusinessSetupState(),
     queryKey: [...adminKeys.all, "businessSetup"] as const,
+  });
+
+export const adminStaffListQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetStaffList(),
+    queryKey: adminKeys.staff(),
+  });
+
+export const adminStaffMeQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetMyStaffContext(),
+    queryKey: adminKeys.staffMe(),
+  });
+
+export const adminAuditLogQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetAuditLog(),
+    queryKey: adminKeys.staffAudit(),
   });

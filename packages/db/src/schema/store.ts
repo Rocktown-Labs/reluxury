@@ -244,6 +244,9 @@ export const cartItemsRelations = relations(cartItems, ({ one }) => ({
 export const events = sqliteTable(
   "events",
   {
+    assignedUserId: text("assigned_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
     capacity: integer("capacity"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -266,10 +269,15 @@ export const events = sqliteTable(
   (table) => [
     index("events_active_idx").on(table.isActive),
     index("events_date_idx").on(table.startDate),
+    index("events_assigned_idx").on(table.assignedUserId),
   ]
 );
 
-export const eventsRelations = relations(events, ({ many }) => ({
+export const eventsRelations = relations(events, ({ many, one }) => ({
+  assignee: one(user, {
+    fields: [events.assignedUserId],
+    references: [user.id],
+  }),
   registrations: many(eventRegistrations),
 }));
 
@@ -322,6 +330,9 @@ export const alterationBookings = sqliteTable(
   "alteration_bookings",
   {
     adminNotes: text("admin_notes"),
+    assignedUserId: text("assigned_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -350,12 +361,17 @@ export const alterationBookings = sqliteTable(
   (table) => [
     index("alteration_bookings_user_idx").on(table.userId),
     index("alteration_bookings_status_idx").on(table.status),
+    index("alteration_bookings_assigned_idx").on(table.assignedUserId),
   ]
 );
 
 export const alterationBookingsRelations = relations(
   alterationBookings,
   ({ one }) => ({
+    assignee: one(user, {
+      fields: [alterationBookings.assignedUserId],
+      references: [user.id],
+    }),
     user: one(user, {
       fields: [alterationBookings.userId],
       references: [user.id],
