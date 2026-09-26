@@ -1,5 +1,5 @@
 /* oxlint-disable complexity */
-import { createDb } from "@reluxury/db";
+import { createDb, readBusinessContact } from "@reluxury/db";
 import {
   orders,
   orderItems,
@@ -287,10 +287,12 @@ export const createOrder = createServerFn({ method: "POST" })
         quantity: item.quantity,
         title: item.product.title,
       }));
+      const business = await readBusinessContact(db);
       await sendViaResend({
         apiKey: env.RESEND_API_KEY ?? "",
         from: EMAIL_FROM.orders,
         html: orderConfirmationHtml({
+          business,
           customerName: data.name,
           deliveryMethod: data.deliveryMethod,
           items: itemsForEmail,
@@ -309,6 +311,7 @@ export const createOrder = createServerFn({ method: "POST" })
               from: EMAIL_FROM.workshops,
               html: workshopConfirmHtml({
                 attendeeName: data.name,
+                business,
                 startDate: "See dashboard for date/time",
                 title: item.product.title,
               }),

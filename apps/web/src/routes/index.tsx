@@ -25,6 +25,7 @@ import {
   newArrivalsQueryOptions,
   eventsQueryOptions,
   promotionsQueryOptions,
+  footerContactQueryOptions,
 } from "@/lib/queries";
 import { getDateValue, isUpcomingWorkshop } from "@/lib/workshops";
 
@@ -40,6 +41,12 @@ export const Route = createFileRoute("/")({
 
 function HomeComponent() {
   const loaderData = Route.useLoaderData();
+
+  const { data: contact } = useQuery(footerContactQueryOptions());
+  const address = contact?.address ?? "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113";
+  const phone = contact?.phone ?? "(501) 404-8696";
+  const hours = contact?.hours ?? "Tue–Fri: 10am–6pm\nSat: 10am–5pm\nSun–Mon: Closed";
+  const [addressLine, ...addressRest] = address.split("\n");
 
   const { data: featured, isLoading: featuredLoading } = useQuery({
     ...featuredProductsQueryOptions(),
@@ -423,14 +430,8 @@ function HomeComponent() {
                   </div>
                   <div>
                     <p className="font-medium text-foreground">Store Hours</p>
-                    <p className="text-sm text-muted-foreground">
-                      Tuesday – Friday: 10:00 AM – 6:00 PM
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Saturday: 10:00 AM – 5:00 PM
-                    </p>
-                    <p className="text-sm text-muted-foreground/60">
-                      Sunday & Monday: Closed
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">
+                      {hours}
                     </p>
                   </div>
                 </div>
@@ -440,14 +441,18 @@ function HomeComponent() {
               <div className="aspect-video rounded-xl border border-gold/10 bg-card flex items-center justify-center">
                 <div className="text-center space-y-3">
                   <p className="font-display text-2xl text-gold">
-                    14217 Corvallis Rd, Ste F
+                    {addressLine}
                   </p>
-                  <p className="text-muted-foreground">Maumelle, AR 72113</p>
+                  {addressRest.map((line) => (
+                    <p key={line} className="text-muted-foreground">
+                      {line}
+                    </p>
+                  ))}
                   <a
-                    href="tel:5014048696"
+                    href={`tel:${phone.replaceAll(/\D/g, "")}`}
                     className="text-gold hover:text-gold-light transition-colors"
                   >
-                    (501) 404-8696
+                    {phone}
                   </a>
                 </div>
               </div>

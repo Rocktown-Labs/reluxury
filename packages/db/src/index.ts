@@ -38,3 +38,9 @@ export function createDb() {
 
   return drizzleD1(env.DB, { schema });
 }
+
+export {
+  readBusinessContact,
+  DEFAULT_BUSINESS_CONTACT,
+} from "./business";
+export type { BusinessContact } from "./business";

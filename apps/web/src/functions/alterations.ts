@@ -1,4 +1,4 @@
-import { createDb } from "@reluxury/db";
+import { createDb, readBusinessContact } from "@reluxury/db";
 import { alterationBookings } from "@reluxury/db/schema";
 import { env } from "@reluxury/env/server";
 import { EMAIL_FROM, sendViaResend, tailoringBookingHtml } from "@reluxury/transactional";
@@ -40,10 +40,12 @@ export const createAlterationBooking = createServerFn({ method: "POST" })
       `<div style="font-family:sans-serif"><h2>New tailoring request</h2><p>${context.session.user.email} requested <strong>${data.serviceType}</strong> for "${data.itemDescription}".</p><p>Preferred: ${data.preferredDate}${data.preferredTime ? ` at ${data.preferredTime}` : ""}.</p></div>`
     );
     try {
+      const business = await readBusinessContact(db);
       await sendViaResend({
         apiKey: env.RESEND_API_KEY ?? "",
         from: EMAIL_FROM.tailoring,
         html: tailoringBookingHtml({
+          business,
           customerName: context.session.user.name ?? "there",
           preferredDate: data.preferredDate,
           serviceType: data.serviceType,

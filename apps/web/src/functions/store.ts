@@ -5,7 +5,6 @@ import {
   productImages,
   products,
   promotions,
-  storeSettings,
 } from "@reluxury/db/schema";
 import { createServerFn } from "@tanstack/react-start";
 import {
@@ -304,23 +303,15 @@ export const getPromotions = createServerFn({ method: "GET" })
     });
   });
 
+export {
+  readBusinessContact,
+  DEFAULT_BUSINESS_CONTACT,
+} from "@reluxury/db";
+export type { BusinessContact } from "@reluxury/db";
+
 export const getFooterContact = createServerFn({ method: "GET" }).handler(
   async () => {
     const db = createDb();
-    const setting = await db.query.storeSettings.findFirst({
-      where: eq(storeSettings.key, "footer_contact"),
-    });
-    if (setting) {
-      try {
-        return JSON.parse(setting.value);
-      } catch {
-        // Fallback below
-      }
-    }
-    return {
-      address: "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113",
-      hours: "Tue–Fri: 10am–6pm\nSat: 10am–5pm\nSun–Mon: Closed",
-      phone: "(501) 404-8696",
-    };
+    return readBusinessContact(db);
   }
 );

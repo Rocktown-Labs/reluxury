@@ -13,6 +13,7 @@ import {
   adminGetCustomers,
   adminGetAbandonedCarts,
   adminGetShippoSettings,
+  adminGetBusinessSetupState,
 } from "@/functions/admin";
 import { getCart } from "@/functions/cart";
 import {
@@ -190,8 +191,10 @@ export const cartQueryOptions = () =>
 
 export const footerContactQueryOptions = () =>
   queryOptions({
+    gcTime: 1000 * 60 * 60 * 24,
     queryFn: () => getFooterContact(),
     queryKey: storeKeys.footerContact(),
+    staleTime: 1000 * 60 * 60,
   });
 
 export const adminOrderByIdQueryOptions = (orderId: string) =>
@@ -228,4 +231,10 @@ export const adminShippoSettingsQueryOptions = () =>
   queryOptions({
     queryFn: () => adminGetShippoSettings(),
     queryKey: adminKeys.shippoSettings(),
+  });
+
+export const adminBusinessSetupQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetBusinessSetupState(),
+    queryKey: [...adminKeys.all, "businessSetup"] as const,
   });

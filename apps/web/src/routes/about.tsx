@@ -1,11 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MapPin, Clock, Phone, Instagram, Heart, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+
+import { footerContactQueryOptions } from "@/lib/queries";
 
 export const Route = createFileRoute("/about")({
   component: AboutComponent,
 });
 
 function AboutComponent() {
+  const { data: contact } = useQuery(footerContactQueryOptions());
+  const address = contact?.address ?? "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113";
+  const phone = contact?.phone ?? "(501) 404-8696";
+  const hours = contact?.hours ?? "Tue–Fri: 10am–6pm\nSat: 10am–5pm";
   return (
     <div className="flex flex-col">
       {/* Hero */}
@@ -88,26 +95,23 @@ function AboutComponent() {
           <div className="grid sm:grid-cols-3 gap-6">
             <div className="flex flex-col items-center gap-2 text-center">
               <MapPin className="h-5 w-5 text-gold" />
-              <p className="text-sm text-muted-foreground">
-                14217 Corvallis Rd, Ste F<br />
-                Maumelle, AR 72113
+              <p className="text-sm text-muted-foreground whitespace-pre-line">
+                {address}
               </p>
             </div>
             <div className="flex flex-col items-center gap-2 text-center">
               <Clock className="h-5 w-5 text-gold" />
-              <p className="text-sm text-muted-foreground">
-                Tue–Fri: 10am–6pm
-                <br />
-                Sat: 10am–5pm
+              <p className="text-sm text-muted-foreground whitespace-pre-line">
+                {hours}
               </p>
             </div>
             <div className="flex flex-col items-center gap-2 text-center">
               <Phone className="h-5 w-5 text-gold" />
               <a
-                href="tel:5014048696"
+                href={`tel:${phone.replaceAll(/\D/g, "")}`}
                 className="text-sm text-muted-foreground hover:text-gold transition-colors"
               >
-                (501) 404-8696
+                {phone}
               </a>
             </div>
           </div>

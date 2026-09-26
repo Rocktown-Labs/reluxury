@@ -11,6 +11,7 @@ import { useEffect } from "react";
 
 import Footer from "../components/footer";
 import Header from "../components/header";
+import { getFooterContact } from "../functions/store";
 import { queryClient } from "../lib/query-client";
 
 import appCss from "../index.css?url";
@@ -22,119 +23,136 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   component: RootDocument,
   errorComponent: RootErrorComponent,
 
-  head: () => ({
-    links: [
-      {
-        href: appCss,
-        rel: "stylesheet",
-      },
-      {
-        href: "https://fonts.googleapis.com",
-        rel: "preconnect",
-      },
-      {
-        crossOrigin: "anonymous",
-        href: "https://fonts.gstatic.com",
-        rel: "preconnect",
-      },
-      {
-        href: "/favicon.jpg",
-        rel: "icon",
-        type: "image/jpeg",
-      },
-      {
-        href: "https://reluxury.shop/",
-        rel: "canonical",
-      },
-    ],
-    meta: [
-      {
-        charSet: "utf-8",
-      },
-      {
-        content: "width=device-width, initial-scale=1",
-        name: "viewport",
-      },
-      {
-        title: "ReLUXURY | Elevated Resale & Alterations Boutique",
-      },
-      {
-        content:
-          "ReLUXURY Consignment & Alterations Boutique - Elevated resale fashion and expert alterations in Maumelle, AR. Shop pre-loved luxury, book alterations, and join free workshops.",
-        name: "description",
-      },
-      {
-        content: "#0a0a0a",
-        name: "theme-color",
-      },
-      {
-        content: "ReLUXURY | Elevated Resale & Alterations Boutique",
-        property: "og:title",
-      },
-      {
-        content:
-          "Elevated resale fashion, expert alterations, and free workshops in Maumelle, AR.",
-        property: "og:description",
-      },
-      {
-        content: "website",
-        property: "og:type",
-      },
-      {
-        content: "https://reluxury.shop/",
-        property: "og:url",
-      },
-      {
-        content: "https://reluxury.shop/logo.jpg",
-        property: "og:image",
-      },
-      {
-        content: "ReLUXURY Boutique",
-        property: "og:site_name",
-      },
-      {
-        content: "en_US",
-        property: "og:locale",
-      },
-      {
-        content: "summary_large_image",
-        name: "twitter:card",
-      },
-      {
-        content: "ReLUXURY | Elevated Resale & Alterations Boutique",
-        name: "twitter:title",
-      },
-      {
-        content:
-          "Elevated resale fashion, expert alterations, and free workshops in Maumelle, AR.",
-        name: "twitter:description",
-      },
-      {
-        content: "https://reluxury.shop/logo.jpg",
-        name: "twitter:image",
-      },
-    ],
-    scripts: [
-      {
-        children: JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "ClothingStore",
-          address: {
-            "@type": "PostalAddress",
-            addressLocality: "Maumelle",
-            addressRegion: "AR",
-            postalCode: "72113",
-            streetAddress: "14217 Corvallis Rd, Ste F",
-          },
-          image: "https://reluxury.shop/logo.jpg",
-          name: "ReLUXURY Consignment & Alterations Boutique",
-          telephone: "(501) 404-8696",
-          url: "https://reluxury.shop/",
-        }),
-        type: "application/ld+json",
-      },
-    ],
-  }),
+  head: ({ loaderData }) => {
+    const contact = loaderData?.contact as
+      | { address?: string; businessName?: string; phone?: string }
+      | null
+      | undefined;
+    const streetAddress =
+      contact?.address?.split("\n")[0] ?? "14217 Corvallis Rd, Ste F";
+    return {
+      links: [
+        {
+          href: appCss,
+          rel: "stylesheet",
+        },
+        {
+          href: "https://fonts.googleapis.com",
+          rel: "preconnect",
+        },
+        {
+          crossOrigin: "anonymous",
+          href: "https://fonts.gstatic.com",
+          rel: "preconnect",
+        },
+        {
+          href: "/favicon.jpg",
+          rel: "icon",
+          type: "image/jpeg",
+        },
+        {
+          href: "https://reluxury.shop/",
+          rel: "canonical",
+        },
+      ],
+      meta: [
+        {
+          charSet: "utf-8",
+        },
+        {
+          content: "width=device-width, initial-scale=1",
+          name: "viewport",
+        },
+        {
+          title: "ReLUXURY | Elevated Resale & Alterations Boutique",
+        },
+        {
+          content:
+            "ReLUXURY Consignment & Alterations Boutique - Elevated resale fashion and expert alterations in Maumelle, AR. Shop pre-loved luxury, book alterations, and join free workshops.",
+          name: "description",
+        },
+        {
+          content: "#0a0a0a",
+          name: "theme-color",
+        },
+        {
+          content: "ReLUXURY | Elevated Resale & Alterations Boutique",
+          property: "og:title",
+        },
+        {
+          content:
+            "Elevated resale fashion, expert alterations, and free workshops in Maumelle, AR.",
+          property: "og:description",
+        },
+        {
+          content: "website",
+          property: "og:type",
+        },
+        {
+          content: "https://reluxury.shop/",
+          property: "og:url",
+        },
+        {
+          content: "https://reluxury.shop/logo.jpg",
+          property: "og:image",
+        },
+        {
+          content: "ReLUXURY Boutique",
+          property: "og:site_name",
+        },
+        {
+          content: "en_US",
+          property: "og:locale",
+        },
+        {
+          content: "summary_large_image",
+          name: "twitter:card",
+        },
+        {
+          content: "ReLUXURY | Elevated Resale & Alterations Boutique",
+          name: "twitter:title",
+        },
+        {
+          content:
+            "Elevated resale fashion, expert alterations, and free workshops in Maumelle, AR.",
+          name: "twitter:description",
+        },
+        {
+          content: "https://reluxury.shop/logo.jpg",
+          name: "twitter:image",
+        },
+      ],
+      scripts: [
+        {
+          children: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "ClothingStore",
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: "Maumelle",
+              addressRegion: "AR",
+              postalCode: "72113",
+              streetAddress,
+            },
+            image: "https://reluxury.shop/logo.jpg",
+            name:
+              contact?.businessName ??
+              "ReLUXURY Consignment & Alterations Boutique",
+            telephone: contact?.phone ?? "(501) 404-8696",
+            url: "https://reluxury.shop/",
+          }),
+          type: "application/ld+json",
+        },
+      ],
+    };
+  },
+  loader: async () => {
+    try {
+      return { contact: await getFooterContact() };
+    } catch {
+      return { contact: null };
+    }
+  },
 });
 
 function RootDocument() {

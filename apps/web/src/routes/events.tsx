@@ -5,9 +5,11 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { Calendar } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import EventCard from "@/components/event-card";
 import { getEvents } from "@/functions/store";
+import { footerContactQueryOptions } from "@/lib/queries";
 import { getDateValue, isUpcomingWorkshop } from "@/lib/workshops";
 
 export const Route = createFileRoute("/events")({
@@ -20,6 +22,8 @@ function EventsComponent() {
     select: (state) => state.location.pathname,
   });
   const { events } = Route.useLoaderData();
+  const { data: contact } = useQuery(footerContactQueryOptions());
+  const phone = contact?.phone ?? "(501) 404-8696";
 
   if (pathname !== "/events" && pathname !== "/events/") {
     return <Outlet />;
@@ -122,9 +126,9 @@ function EventsComponent() {
               entrepreneurs. Reach out to discuss hosting your workshop or
               pop-up at ReLUXURY.
             </p>
-            <a href="tel:5014048696">
+            <a href={`tel:${phone.replaceAll(/\D/g, "")}`}>
               <Button className="bg-gold text-primary-foreground hover:bg-gold-dark">
-                Call Us: (501) 404-8696
+                Call Us: {phone}
               </Button>
             </a>
           </div>

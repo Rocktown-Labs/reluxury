@@ -6,9 +6,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckCircle, Clock, MapPin, Phone, Scissors } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
 import { createAlterationBooking } from "@/functions/alterations";
 import { authClient } from "@/lib/auth-client";
+import { footerContactQueryOptions } from "@/lib/queries";
 
 const SERVICE_TYPES = [
   "Hemming",
@@ -39,6 +41,10 @@ export const Route = createFileRoute("/alterations")({
 
 function AlterationsComponent() {
   const { data: session } = authClient.useSession();
+  const { data: contact } = useQuery(footerContactQueryOptions());
+  const address = contact?.address ?? "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113";
+  const phone = contact?.phone ?? "(501) 404-8696";
+  const hours = contact?.hours ?? "Tue–Fri: 10am–6pm\nSat: 10am–5pm";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     itemDescription: "",
@@ -136,26 +142,23 @@ function AlterationsComponent() {
               <div className="space-y-3">
                 <div className="flex items-start gap-3 text-sm">
                   <MapPin className="h-4 w-4 text-gold mt-0.5 shrink-0" />
-                  <span className="text-muted-foreground">
-                    14217 Corvallis Rd, Ste F<br />
-                    Maumelle, AR 72113
+                  <span className="text-muted-foreground whitespace-pre-line">
+                    {address}
                   </span>
                 </div>
                 <div className="flex items-start gap-3 text-sm">
                   <Clock className="h-4 w-4 text-gold mt-0.5 shrink-0" />
-                  <span className="text-muted-foreground">
-                    Tue–Fri: 10am–6pm
-                    <br />
-                    Sat: 10am–5pm
+                  <span className="text-muted-foreground whitespace-pre-line">
+                    {hours}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <Phone className="h-4 w-4 text-gold shrink-0" />
                   <a
-                    href="tel:5014048696"
+                    href={`tel:${phone.replaceAll(/\D/g, "")}`}
                     className="text-muted-foreground hover:text-gold transition-colors"
                   >
-                    (501) 404-8696
+                    {phone}
                   </a>
                 </div>
               </div>

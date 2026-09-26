@@ -1,4 +1,4 @@
-import { createDb } from "@reluxury/db";
+import { createDb, readBusinessContact } from "@reluxury/db";
 import * as schema from "@reluxury/db/schema/auth";
 import { env } from "@reluxury/env/server";
 import { EMAIL_FROM, welcomeHtml } from "@reluxury/transactional";
@@ -13,10 +13,11 @@ async function sendWelcomeEmail(email: string, name: string) {
   if (!apiKey) {
     return;
   }
+  const business = await readBusinessContact(createDb());
   await fetch("https://api.resend.com/emails", {
     body: JSON.stringify({
       from: EMAIL_FROM.noreply,
-      html: welcomeHtml({ name }),
+      html: welcomeHtml({ business, name }),
       subject: "Welcome to ReLUXURY",
       to: email,
     }),

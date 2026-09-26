@@ -10,6 +10,7 @@ import { Separator } from "@reluxury/ui/components/separator";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, MapPin, Truck, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getCart } from "@/functions/cart";
@@ -18,6 +19,7 @@ import { getProductsByIds } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
 import { getGuestCart, clearGuestCart } from "@/lib/guest-cart";
 import { queryClient } from "@/lib/query-client";
+import { footerContactQueryOptions } from "@/lib/queries";
 import type { ShippoRate } from "@/lib/shippo";
 
 export const Route = createFileRoute("/checkout")({
@@ -43,6 +45,10 @@ interface CheckoutItem {
 function CheckoutComponent() {
   const { cartItems: serverCartItems } = Route.useLoaderData();
   const { data: session } = authClient.useSession();
+  const { data: contact } = useQuery(footerContactQueryOptions());
+  const pickupAddress = (
+    contact?.address ?? "14217 Corvallis Rd, Ste F, Maumelle, AR 72113"
+  ).replaceAll("\n", ", ");
   const router = useRouter();
 
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "shipping">(
@@ -428,7 +434,7 @@ function CheckoutComponent() {
                   <p className="text-sm text-muted-foreground mt-1 ml-6">
                     Pick up your order at our boutique during business hours.
                     <br />
-                    14217 Corvallis Rd, Ste F, Maumelle, AR 72113
+                    {pickupAddress}
                   </p>
                 </div>
               </div>

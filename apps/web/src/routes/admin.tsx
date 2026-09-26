@@ -88,6 +88,7 @@ import {
   adminGetShippoSettings,
   adminUpdateShippoApiKey,
   adminClearShippoApiKey,
+  adminSetBusinessSetupDone,
 } from "@/functions/admin";
 import { getUser } from "@/functions/get-user";
 import { getFooterContact, getCategories } from "@/functions/store";
@@ -101,6 +102,7 @@ import {
   adminCustomersQueryOptions,
   adminAbandonedCartsQueryOptions,
   adminShippoSettingsQueryOptions,
+  adminBusinessSetupQueryOptions,
   footerContactQueryOptions,
   categoriesQueryOptions,
 } from "@/lib/queries";
@@ -307,6 +309,12 @@ function AdminDashboard() {
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
+  const { data: businessSetup } = useQuery({
+    ...adminBusinessSetupQueryOptions(),
+    refetchOnMount: "always" as const,
+    staleTime: 0,
+  });
+
   const upcomingWorkshopCount =
     events?.filter((event) => {
       if (!event.isActive) {
@@ -461,6 +469,9 @@ function AdminDashboard() {
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 p-4 lg:p-8 space-y-6">
+        {businessSetup && !businessSetup.done && contact && (
+          <BusinessSetupPrompt contact={contact} />
+        )}
         <div className="space-y-6">
           <AdminTabContent
             activeTab={activeTab}
@@ -642,6 +653,133 @@ function AdminTabContent({
       return null;
     }
   }
+}
+
+function BusinessSetupPrompt({ contact }: { contact: any }) {
+  const [formData, setFormData] = useState({
+    address: contact?.address ?? "",
+    businessName: contact?.businessName ?? "",
+    email: contact?.email ?? "",
+    hours: contact?.hours ?? "",
+    phone: contact?.phone ?? "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const dismiss = async () => {
+    await adminSetBusinessSetupDone();
+    await queryClient.invalidateQueries({ queryKey: ["admin"] });
+  };
+
+  const handleSave = async () => {
+    if (!formData.address || !formData.phone || !formData.hours) {
+      toast.error("Address, phone and hours are required");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await adminUpdateFooterContact({
+        data: {
+          address: formData.address,
+          businessName: formData.businessName || undefined,
+          email: formData.email || undefined,
+          hours: formData.hours,
+          phone: formData.phone,
+        },
+      });
+      await adminSetBusinessSetupDone();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await queryClient.invalidateQueries({
+        queryKey: footerContactQueryOptions().queryKey,
+      });
+      toast.success("Business info saved — now live across the site");
+    } catch {
+      toast.error("Failed to save business info");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-6 rounded-xl border border-gold/25 bg-gold/5 space-y-4">
+      <div>
+        <h3 className="font-display text-xl text-gold">
+          Set up your business info
+        </h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          This shows in the footer, contact sections, and customer emails.
+          You can change it anytime in Settings.
+        </p>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Business name</Label>
+          <Input
+            value={formData.businessName}
+            onChange={(e) =>
+              setFormData({ ...formData, businessName: e.target.value })
+            }
+            placeholder="ReLUXURY Consignment & Alterations Boutique"
+            className="border-gold/10 bg-card"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Contact email</Label>
+          <Input
+            value={formData.email}
+            onChange={(e) =>
+              setFormData({ ...formData, email: e.target.value })
+            }
+            placeholder="hello@reluxury.shop"
+            className="border-gold/10 bg-card"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Phone *</Label>
+          <Input
+            value={formData.phone}
+            onChange={(e) =>
+              setFormData({ ...formData, phone: e.target.value })
+            }
+            className="border-gold/10 bg-card"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Address *</Label>
+          <Textarea
+            value={formData.address}
+            onChange={(e) =>
+              setFormData({ ...formData, address: e.target.value })
+            }
+            rows={2}
+            className="border-gold/10 bg-card"
+          />
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label>Hours *</Label>
+          <Textarea
+            value={formData.hours}
+            onChange={(e) =>
+              setFormData({ ...formData, hours: e.target.value })
+            }
+            rows={3}
+            className="border-gold/10 bg-card"
+          />
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          className="bg-gold text-primary-foreground hover:bg-gold-dark"
+          disabled={isSaving}
+          onClick={handleSave}
+        >
+          {isSaving ? "Saving..." : "Save & publish"}
+        </Button>
+        <Button variant="ghost" className="text-muted-foreground" onClick={dismiss}>
+          Skip for later
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function DashboardStats({
@@ -3620,6 +3758,8 @@ function SettingsAdmin({
   const [address, setAddress] = useState(contact?.address || "");
   const [phone, setPhone] = useState(contact?.phone || "");
   const [hours, setHours] = useState(contact?.hours || "");
+  const [businessName, setBusinessName] = useState(contact?.businessName || "");
+  const [email, setEmail] = useState(contact?.email || "");
   const [shippoApiKey, setShippoApiKey] = useState("");
 
   const updateMutation = useMutation({
@@ -3667,7 +3807,13 @@ function SettingsAdmin({
       toast.error("All settings fields are required");
       return;
     }
-    updateMutation.mutate({ address, hours, phone });
+    updateMutation.mutate({
+      address,
+      businessName: businessName || undefined,
+      email: email || undefined,
+      hours,
+      phone,
+    });
   };
 
   const handleSaveShippoKey = () => {
@@ -3690,6 +3836,26 @@ function SettingsAdmin({
         </h3>
 
         <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Business Name</Label>
+            <Input
+              value={businessName}
+              onChange={(e: any) => setBusinessName(e.target.value)}
+              placeholder="Business name"
+              className="border-gold/10"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Contact Email</Label>
+            <Input
+              value={email}
+              onChange={(e: any) => setEmail(e.target.value)}
+              placeholder="Contact email"
+              className="border-gold/10"
+            />
+          </div>
+
           <div className="space-y-2">
             <Label>Store Address</Label>
             <Textarea

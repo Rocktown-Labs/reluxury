@@ -1,4 +1,4 @@
-import { createDb } from "@reluxury/db";
+import { createDb, readBusinessContact } from "@reluxury/db";
 import {
   products,
   productImages,
@@ -705,10 +705,12 @@ export const adminUpdateAlteration = createServerFn({ method: "POST" })
       });
       if (booking?.user?.email) {
         try {
+          const business = await readBusinessContact(db);
           await sendViaResend({
             apiKey: env.RESEND_API_KEY ?? "",
             from: EMAIL_FROM.tailoring,
             html: tailoringStatusHtml({
+              business,
               customerName: booking.user.name ?? "there",
               serviceType: booking.serviceType,
               status: data.status.replaceAll("_", " "),
@@ -1013,6 +1015,8 @@ export const adminUpdateFooterContact = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       address: z.string().min(1),
+      businessName: z.string().optional(),
+      email: z.string().optional(),
       hours: z.string().min(1),
       phone: z.string().min(1),
     })
@@ -1025,7 +1029,14 @@ export const adminUpdateFooterContact = createServerFn({ method: "POST" })
       where: eq(storeSettings.key, "footer_contact"),
     });
 
-    const jsonValue = JSON.stringify(data);
+    const current = (() => {
+      try {
+        return existing ? JSON.parse(existing.value) : {};
+      } catch {
+        return {};
+      }
+    })();
+    const jsonValue = JSON.stringify({ ...current, ...data });
 
     if (existing) {
       await db
@@ -1040,6 +1051,42 @@ export const adminUpdateFooterContact = createServerFn({ method: "POST" })
       });
     }
 
+    return { success: true };
+  });
+
+const BUSINESS_SETUP_DONE_KEY = "business_info_confirmed";
+
+export const adminGetBusinessSetupState = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const setting = await db.query.storeSettings.findFirst({
+      where: eq(storeSettings.key, BUSINESS_SETUP_DONE_KEY),
+    });
+    return { done: setting?.value === "1" };
+  });
+
+export const adminSetBusinessSetupDone = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireAdmin(context);
+    const db = createDb();
+    const existing = await db.query.storeSettings.findFirst({
+      where: eq(storeSettings.key, BUSINESS_SETUP_DONE_KEY),
+    });
+    if (existing) {
+      await db
+        .update(storeSettings)
+        .set({ value: "1" })
+        .where(eq(storeSettings.key, BUSINESS_SETUP_DONE_KEY));
+    } else {
+      await db.insert(storeSettings).values({
+        id: crypto.randomUUID(),
+        key: BUSINESS_SETUP_DONE_KEY,
+        value: "1",
+      });
+    }
     return { success: true };
   });
 
