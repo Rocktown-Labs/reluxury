@@ -21,10 +21,11 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "portless reluxury turbo -F @reluxury/infra dev",
+    "dev": "portless reluxury turbo -F @reluxury/infra dev -F @reluxury/transactional dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
     "dev:web": "turbo -F web dev",
+    "dev:email": "turbo -F @reluxury/transactional dev",
     "db:push": "turbo -F @reluxury/db db:push",
     "db:generate": "turbo -F @reluxury/db db:generate",
     "db:studio": "turbo -F @reluxury/db db:studio",
