@@ -46,7 +46,7 @@ import {
   X,
   Users,
   Settings,
-  Bell,
+  RefreshCw,
   Sparkles,
   Search,
   Tag,
@@ -105,6 +105,7 @@ import {
 import { queryClient } from "@/lib/query-client";
 
 const LIVE_ADMIN_QUERY_OPTIONS = {
+  refetchInterval: 30_000,
   refetchOnMount: "always" as const,
   refetchOnWindowFocus: true,
   staleTime: 0,
@@ -191,28 +192,27 @@ function AdminDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [hasNewUpdates, setHasNewUpdates] = useState(false);
-
-  // Simulated live indicator update trigger
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setHasNewUpdates(true);
-    }, 15_000);
-    return () => clearTimeout(timer);
-  }, []);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const previousOrderCount = useRef<number | null>(null);
 
   useEffect(() => {
     void queryClient.refetchQueries({ queryKey: ["admin"] });
   }, [activeTab]);
 
   const handleRefreshData = async () => {
-    setHasNewUpdates(false);
-    toast.info("Refreshing administration database...");
-    await queryClient.invalidateQueries({ queryKey: ["admin"] });
-    await queryClient.invalidateQueries({ queryKey: ["store"] });
-    await queryClient.refetchQueries({ queryKey: ["admin"] });
-    await router.invalidate({ sync: true });
-    toast.success("Database fully synchronized");
+    if (isRefreshing) {
+      return;
+    }
+    setIsRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+      await queryClient.invalidateQueries({ queryKey: ["store"] });
+      await queryClient.refetchQueries({ queryKey: ["admin"] });
+      await router.invalidate({ sync: true });
+      toast.success("Dashboard synchronized");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -220,6 +220,21 @@ function AdminDashboard() {
     initialData: loaderData.stats,
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
+
+  // Real change detection: toast only when the order count actually grows
+  useEffect(() => {
+    if (!stats) {
+      return;
+    }
+    const total = stats.totalOrders ?? 0;
+    if (
+      previousOrderCount.current !== null &&
+      total > previousOrderCount.current
+    ) {
+      toast.success("New order received — dashboard updated");
+    }
+    previousOrderCount.current = total;
+  }, [stats]);
 
   const { data: products, isLoading: productsLoading } = useQuery({
     ...adminProductsQueryOptions(),
@@ -305,17 +320,21 @@ function AdminDashboard() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          {hasNewUpdates && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="relative text-gold"
-              onClick={handleRefreshData}
-            >
-              <Bell className="h-5 w-5 animate-bounce" />
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
-            </Button>
-          )}
+          <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            Live
+          </span>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Refresh dashboard data"
+            disabled={isRefreshing}
+            onClick={handleRefreshData}
+          >
+            <RefreshCw
+              className={`h-5 w-5 text-gold ${isRefreshing ? "animate-spin" : ""}`}
+            />
+          </Button>
           <Button
             size="icon"
             variant="ghost"
@@ -373,46 +392,29 @@ function AdminDashboard() {
 
         <div className="space-y-3 pt-6 border-t border-gold/10 text-xs text-muted-foreground/60">
           <p>EST. 2025 &middot; Maumelle, AR</p>
-          {hasNewUpdates && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-[10px]">
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              Auto-sync on
+            </span>
             <Button
               size="xs"
               variant="outline"
-              className="w-full text-[10px] border-gold/20 text-gold hover:bg-gold/10 gap-1.5 animate-pulse"
+              className="text-[10px] border-gold/20 text-gold hover:bg-gold/10 gap-1.5"
+              disabled={isRefreshing}
               onClick={handleRefreshData}
             >
-              <Bell className="h-3 w-3" /> Live Update Pending
+              <RefreshCw
+                className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
             </Button>
-          )}
+          </div>
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 p-4 lg:p-8 space-y-6">
-        {/* Real-time Indicator Alert Banner */}
-        {hasNewUpdates && (
-          <div className="p-4 bg-gold/5 border border-gold/10 rounded-xl flex items-center justify-between gap-4 text-sm animate-fade-in">
-            <div className="flex items-center gap-3">
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gold" />
-              </span>
-              <p className="text-muted-foreground">
-                <span className="text-gold font-medium">Database Alert:</span>{" "}
-                New customer events or orders have occurred. Click refresh to
-                sync.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-gold/20 text-gold hover:bg-gold/10 shrink-0 text-xs"
-              onClick={handleRefreshData}
-            >
-              Refresh
-            </Button>
-          </div>
-        )}
-
         <div className="space-y-6">
           <AdminTabContent
             activeTab={activeTab}
