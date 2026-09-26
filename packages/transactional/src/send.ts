@@ -45,6 +45,22 @@ export function welcomeHtml(props: { name: string }) {
   return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Welcome, ${props.name}!</h1><p>Thanks for joining — shop pre-loved luxury, book alterations, and grab a seat in our free workshops.</p><p><a href="https://reluxury.shop/shop">Start shopping</a> · <a href="https://reluxury.shop/events">Browse workshops</a></p></div></div>`;
 }
 
+export function tailoringBookingHtml(props: {
+  customerName: string;
+  preferredDate: string;
+  serviceType: string;
+}) {
+  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Request received</h1><p>Hi ${props.customerName}, we got your tailoring request for <strong>${props.serviceType}</strong> (${props.preferredDate}). We'll confirm your appointment shortly.</p><p><a href="https://reluxury.shop/dashboard">View my bookings</a></p></div></div>`;
+}
+
+export function tailoringStatusHtml(props: {
+  customerName: string;
+  serviceType: string;
+  status: string;
+}) {
+  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Booking update</h1><p>Hi ${props.customerName}, your tailoring request for <strong>${props.serviceType}</strong> is now <strong>${props.status}</strong>.</p></div></div>`;
+}
+
 export function workshopConfirmHtml(props: {
   attendeeName: string;
   location?: string;

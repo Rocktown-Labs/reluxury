@@ -1,5 +1,7 @@
 import { createDb } from "@reluxury/db";
 import { alterationBookings } from "@reluxury/db/schema";
+import { env } from "@reluxury/env/server";
+import { EMAIL_FROM, sendViaResend, tailoringBookingHtml } from "@reluxury/transactional";
 import { createServerFn } from "@tanstack/react-start";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
@@ -37,6 +39,21 @@ export const createAlterationBooking = createServerFn({ method: "POST" })
       `New tailoring request — ${data.serviceType}`,
       `<div style="font-family:sans-serif"><h2>New tailoring request</h2><p>${context.session.user.email} requested <strong>${data.serviceType}</strong> for "${data.itemDescription}".</p><p>Preferred: ${data.preferredDate}${data.preferredTime ? ` at ${data.preferredTime}` : ""}.</p></div>`
     );
+    try {
+      await sendViaResend({
+        apiKey: env.RESEND_API_KEY ?? "",
+        from: EMAIL_FROM.tailoring,
+        html: tailoringBookingHtml({
+          customerName: context.session.user.name ?? "there",
+          preferredDate: data.preferredDate,
+          serviceType: data.serviceType,
+        }),
+        subject: `Tailoring request received — ${data.serviceType}`,
+        to: context.session.user.email,
+      });
+    } catch (error) {
+      console.error("Tailoring confirmation email failed", error);
+    }
     return { success: true };
   });
 

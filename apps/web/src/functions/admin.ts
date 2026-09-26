@@ -12,6 +12,11 @@ import {
   cartItems,
 } from "@reluxury/db/schema";
 import { env } from "@reluxury/env/server";
+import {
+  EMAIL_FROM,
+  sendViaResend,
+  tailoringStatusHtml,
+} from "@reluxury/transactional";
 import { createServerFn } from "@tanstack/react-start";
 import {
   eq,
@@ -21,6 +26,7 @@ import {
   isNull,
   ne,
   or,
+  and,
   gte,
   inArray,
 } from "drizzle-orm";
@@ -671,6 +677,29 @@ export const adminUpdateAlteration = createServerFn({ method: "POST" })
       .update(alterationBookings)
       .set(update)
       .where(eq(alterationBookings.id, id));
+    if (data.status) {
+      const booking = await db.query.alterationBookings.findFirst({
+        where: eq(alterationBookings.id, id),
+        with: { user: true },
+      });
+      if (booking?.user?.email) {
+        try {
+          await sendViaResend({
+            apiKey: env.RESEND_API_KEY ?? "",
+            from: EMAIL_FROM.tailoring,
+            html: tailoringStatusHtml({
+              customerName: booking.user.name ?? "there",
+              serviceType: booking.serviceType,
+              status: data.status.replaceAll("_", " "),
+            }),
+            subject: `Tailoring update — ${booking.serviceType} ${data.status.replaceAll("_", " ")}`,
+            to: booking.user.email,
+          });
+        } catch (error) {
+          console.error("Tailoring status email failed", error);
+        }
+      }
+    }
     return { success: true };
   });
 
