@@ -14,7 +14,13 @@
     "CLOUDFLARE_EMAIL",
     "GITHUB_TOKEN",
     "GITHUB_SHA",
-    "PULL_REQUEST"
+    "PULL_REQUEST",
+    "BETTER_AUTH_SECRET",
+    "ADMIN_EMAILS",
+    "RESEND_API_KEY",
+    "RESEND_WEBHOOK_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
   ],
   "tasks": {
     "build": {
