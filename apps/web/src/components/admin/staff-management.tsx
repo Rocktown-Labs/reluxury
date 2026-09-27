@@ -196,8 +196,8 @@ export default function StaffManagement({
       toast.error("Enter an email address first");
       return;
     }
-    // oxlint-disable-next-line no-alert
     if (
+      // oxlint-disable-next-line no-alert
       !confirm(
         `${banned ? "Disable login for" : "Re-enable login for"} ${suspendEmail.trim()}?`
       )
