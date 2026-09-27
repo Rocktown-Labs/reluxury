@@ -17,6 +17,7 @@ const PROD_DOMAIN = "reluxury.shop";
 export const Database = Cloudflare.D1.Database(
   "database",
   Stack.useSync((stack) => ({
+    migrations: "../../packages/db/src/alchemy-migrations",
     name: `reluxury-database-${stack.stage}`,
   }))
 );
@@ -33,9 +34,11 @@ export const Web = Cloudflare.Website.Vite(
   "web",
   Stack.useSync((stack) => {
     const isProd = stack.stage === "prod";
+    // Non-prod stages (PR previews, dev) use their own worker URL so auth
+    // cookies and origin checks work on the preview hostname.
     const baseUrl = isProd
       ? `https://${PROD_DOMAIN}`
-      : (process.env.BETTER_AUTH_URL ?? "http://localhost:3001");
+      : Cloudflare.Worker.URL;
     return {
       dev: {
         host: process.env.HOST ?? "127.0.0.1",
@@ -52,7 +55,7 @@ export const Web = Cloudflare.Website.Vite(
         BETTER_AUTH_URL: baseUrl,
         CORS_ORIGIN: isProd
           ? baseUrl
-          : (process.env.CORS_ORIGIN ?? "http://localhost:3001"),
+          : Cloudflare.Worker.URL,
         DB: Database,
         GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ?? "",
         GOOGLE_CLIENT_SECRET: Config.Redacted("GOOGLE_CLIENT_SECRET").pipe(
@@ -74,7 +77,7 @@ export const Web = Cloudflare.Website.Vite(
           Config.withDefault(Redacted.make(""))
         ),
       },
-      name: "reluxury-web",
+      name: isProd ? "reluxury-web" : `reluxury-web-${stack.stage}`,
       observability: {
         enabled: true,
       },

@@ -47,6 +47,7 @@ import {
   Users,
   Settings,
   RefreshCw,
+  ShieldCheck,
   Sparkles,
   Search,
   Tag,
@@ -55,6 +56,7 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
+import StaffManagement from "@/components/admin/staff-management";
 import CalendarAdmin from "@/components/calendar-admin";
 import {
   adminGetStats,
@@ -91,6 +93,10 @@ import {
   adminSetBusinessSetupDone,
 } from "@/functions/admin";
 import { getUser } from "@/functions/get-user";
+import {
+  adminGetAuditLog,
+  adminGetStaffList,
+} from "@/functions/staff";
 import { getFooterContact, getCategories } from "@/functions/store";
 import {
   adminStatsQueryOptions,
@@ -103,6 +109,9 @@ import {
   adminAbandonedCartsQueryOptions,
   adminShippoSettingsQueryOptions,
   adminBusinessSetupQueryOptions,
+  adminStaffListQueryOptions,
+  adminStaffMeQueryOptions,
+  adminAuditLogQueryOptions,
   footerContactQueryOptions,
   categoriesQueryOptions,
 } from "@/lib/queries";
@@ -128,16 +137,57 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+export const TAB_PERMISSIONS: Record<string, string | null> = {
+  "abandoned-carts": "marketing.manage",
+  alterations: "alterations.manage",
+  calendar: "workshops.manage",
+  categories: "products.manage",
+  customers: "customers.view",
+  dashboard: null,
+  events: "workshops.manage",
+  orders: "orders.manage",
+  products: "products.manage",
+  promotions: "marketing.manage",
+  settings: "settings.manage",
+  staff: "staff.manage",
+};
+
 export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
     const session = await getUser();
-    if (!session || session.user.role !== "admin") {
+    const staff = (session as any)?.staff;
+    if (!session || (session.user.role !== "admin" && !staff)) {
       throw redirect({ to: "/" });
     }
     return { session };
   },
   component: AdminComponent,
-  loader: async () => {
+  loader: async ({ context }) => {
+    const session = (context as { session?: any })?.session;
+    const isFullAdmin =
+      session?.user?.role === "admin" ||
+      session?.staff?.role === "owner" ||
+      session?.staff?.role === "admin";
+    const permissions: string[] = isFullAdmin
+      ? []
+      : ((session?.staff?.permissions as string[] | undefined) ?? []);
+    const allow = (tab: string) => {
+      const required = TAB_PERMISSIONS[tab];
+      return !required || isFullAdmin || permissions.includes(required);
+    };
+    const maybe = async <T,>(
+      tab: string,
+      fn: () => Promise<T>
+    ): Promise<T | null> => {
+      if (!allow(tab)) {
+        return null;
+      }
+      try {
+        return await fn();
+      } catch {
+        return null;
+      }
+    };
     const [
       stats,
       products,
@@ -150,22 +200,34 @@ export const Route = createFileRoute("/admin")({
       contact,
       categories,
       shippoSettings,
+      staffList,
+      auditLog,
     ] = await Promise.all([
-      adminGetStats(),
-      adminGetProducts(),
-      adminGetOrders(),
-      adminGetEvents(),
-      adminGetAlterations(),
-      adminGetPromotions(),
-      adminGetCustomers(),
-      adminGetAbandonedCarts(),
+      maybe("dashboard", () => adminGetStats()),
+      maybe("products", () => adminGetProducts()),
+      maybe("orders", () => adminGetOrders()),
+      maybe("events", () => adminGetEvents()),
+      maybe("alterations", () => adminGetAlterations()),
+      maybe("promotions", () => adminGetPromotions()),
+      maybe("customers", () => adminGetCustomers()),
+      maybe("abandoned-carts", () => adminGetAbandonedCarts()),
       getFooterContact(),
-      getCategories(),
-      adminGetShippoSettings(),
+      maybe("products", () => getCategories()),
+      maybe("settings", () => adminGetShippoSettings()),
+      maybe("staff", () => adminGetStaffList()),
+      allow("staff") || allow("dashboard")
+        ? adminGetAuditLog().catch(() => null)
+        : Promise.resolve(null),
     ]);
+    const staffRole = (session?.staff as { role?: string } | undefined)?.role;
+    const viewerIsFullAdmin =
+      session?.user?.role === "admin" ||
+      staffRole === "owner" ||
+      staffRole === "admin";
     return {
       abandonedCarts,
       alterations,
+      auditLog,
       categories,
       contact,
       customers,
@@ -174,7 +236,19 @@ export const Route = createFileRoute("/admin")({
       products,
       promotions,
       shippoSettings,
+      staffList,
       stats,
+      viewer: {
+        isFullAdmin: viewerIsFullAdmin,
+        permissions: viewerIsFullAdmin
+          ? []
+          : ((session?.staff as { permissions?: string[] } | undefined)
+              ?.permissions ?? []),
+        role: staffRole ?? null,
+        title:
+          (session?.staff as { title?: string | null } | undefined)?.title ??
+          null,
+      },
     };
   },
 });
@@ -309,6 +383,52 @@ function AdminDashboard() {
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
+  const { data: staffMe } = useQuery({
+    ...adminStaffMeQueryOptions(),
+    refetchOnMount: "always" as const,
+    staleTime: 0,
+  });
+
+  const isFullAdmin = staffMe?.isFullAdmin ?? loaderData.viewer.isFullAdmin;
+  const myPermissions: string[] = isFullAdmin
+    ? []
+    : ((staffMe?.staff?.permissions as string[] | undefined) ??
+      loaderData.viewer.permissions);
+
+  const canSeeTab = (value: string) => {
+    const required = TAB_PERMISSIONS[value];
+    return !required || isFullAdmin || myPermissions.includes(required);
+  };
+
+  const didAutoNavigate = useRef(false);
+  const {viewer} = loaderData;
+  useEffect(() => {
+    if (didAutoNavigate.current || viewer.isFullAdmin) {
+      return;
+    }
+    if (viewer.role === "tailor") {
+      setActiveTab("alterations");
+    } else if (viewer.role === "fulfillment") {
+      setActiveTab("orders");
+    }
+    didAutoNavigate.current = true;
+  }, [viewer]);
+
+  const { data: staffList, isLoading: staffLoading } = useQuery({
+    ...adminStaffListQueryOptions(),
+    enabled: canSeeTab("staff"),
+    initialData: loaderData.staffList,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
+  });
+
+  const canViewAudit = isFullAdmin || myPermissions.includes("audit.view");
+  const { data: auditLog } = useQuery({
+    ...adminAuditLogQueryOptions(),
+    enabled: canViewAudit,
+    initialData: canViewAudit ? loaderData.auditLog : undefined,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
+  });
+
   const { data: businessSetup } = useQuery({
     ...adminBusinessSetupQueryOptions(),
     refetchOnMount: "always" as const,
@@ -350,8 +470,11 @@ function AdminDashboard() {
     { icon: ShoppingCart, label: "Carts", value: "abandoned-carts" },
     { icon: Users, label: "Customers", value: "customers" },
     { icon: Megaphone, label: "Promotions", value: "promotions" },
+    { icon: ShieldCheck, label: "Staff", value: "staff" },
     { icon: Settings, label: "Settings", value: "settings" },
   ];
+
+  const visibleTabs = tabs.filter((tab) => canSeeTab(tab.value));
 
   return (
     <div className="min-h-screen bg-background flex flex-col lg:flex-row relative">
@@ -409,7 +532,7 @@ function AdminDashboard() {
           </div>
 
           <nav className="space-y-1">
-            {tabs.map((tab) => {
+            {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.value;
               return (
@@ -445,7 +568,13 @@ function AdminDashboard() {
         </div>
 
         <div className="space-y-3 pt-6 border-t border-gold/10 text-xs text-muted-foreground/60">
-          <p>EST. 2025 &middot; Maumelle, AR</p>
+          {loaderData.viewer.role ? (
+            <p className="capitalize">
+              {loaderData.viewer.title ?? loaderData.viewer.role} · Team
+            </p>
+          ) : (
+            <p>EST. 2025 &middot; Maumelle, AR</p>
+          )}
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[10px]">
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -498,6 +627,10 @@ function AdminDashboard() {
             shippoSettings={shippoSettings}
             shippoSettingsLoading={shippoSettingsLoading}
             onNavigateTab={setActiveTab}
+            staffList={staffList}
+            staffLoading={staffLoading}
+            auditLog={auditLog}
+            canViewAudit={isFullAdmin || myPermissions.includes("audit.view")}
           />
         </div>
       </div>
@@ -530,6 +663,10 @@ function AdminTabContent({
   shippoSettings,
   shippoSettingsLoading,
   onNavigateTab,
+  staffList,
+  staffLoading,
+  auditLog,
+  canViewAudit,
 }: {
   activeTab: string;
   statsLoading: boolean;
@@ -555,6 +692,10 @@ function AdminTabContent({
   shippoSettings: any;
   shippoSettingsLoading: boolean;
   onNavigateTab: (tab: string) => void;
+  staffList: any;
+  staffLoading: boolean;
+  auditLog: any;
+  canViewAudit: boolean;
 }) {
   switch (activeTab) {
     case "dashboard": {
@@ -649,6 +790,20 @@ function AdminTabContent({
         <SettingsAdmin contact={contact} shippoSettings={shippoSettings} />
       );
     }
+    case "staff": {
+      return staffLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 text-gold animate-spin" />
+        </div>
+      ) : (
+        <StaffManagement
+          members={staffList?.members ?? []}
+          invitations={staffList?.invitations ?? []}
+          auditLog={auditLog ?? undefined}
+          canViewAudit={canViewAudit}
+        />
+      );
+    }
     default: {
       return null;
     }
@@ -706,8 +861,8 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           Set up your business info
         </h3>
         <p className="text-sm text-muted-foreground mt-1">
-          This shows in the footer, contact sections, and customer emails.
-          You can change it anytime in Settings.
+          This shows in the footer, contact sections, and customer emails. You
+          can change it anytime in Settings.
         </p>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
@@ -774,7 +929,11 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
         >
           {isSaving ? "Saving..." : "Save & publish"}
         </Button>
-        <Button variant="ghost" className="text-muted-foreground" onClick={dismiss}>
+        <Button
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={dismiss}
+        >
           Skip for later
         </Button>
       </div>
@@ -796,6 +955,17 @@ function DashboardStats({
   onNavigateTab: (tab: string) => void;
 }) {
   const now = Date.now();
+
+  if (!stats) {
+    return (
+      <div className="p-6 rounded-xl border border-gold/10 bg-card">
+        <p className="text-sm text-muted-foreground">
+          Your role doesn&apos;t include dashboard metrics. Use the sidebar to
+          reach your sections.
+        </p>
+      </div>
+    );
+  }
 
   const upcomingOrders = (orders ?? [])
     .filter((order: any) =>

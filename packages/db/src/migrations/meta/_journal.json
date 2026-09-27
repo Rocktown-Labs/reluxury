@@ -64,6 +64,13 @@
       "when": 1781308800000,
       "tag": "0008_create_demo_admin_user",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790462146185,
+      "tag": "0009_curly_agent_zero",
+      "breakpoints": true
     }
   ]
 }

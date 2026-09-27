@@ -33,18 +33,12 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
+import { auditAction } from "@/lib/audit";
 import { shippo } from "@/lib/shippo";
+import { requireStaffPermission } from "@/lib/staff-auth";
 import { authMiddleware } from "@/middleware/auth";
 
 import { WORKSHOP_PRODUCT_CATEGORY_ID } from "./store";
-
-function requireAdmin(context: {
-  session: { user: { role?: string | null } } | null;
-}) {
-  if (!context.session || context.session.user.role !== "admin") {
-    throw new Error("Unauthorized: Admin access required");
-  }
-}
 
 const catalogProductFilter = or(
   isNull(products.categoryId),
@@ -161,7 +155,7 @@ async function syncWorkshopToCartProduct(
 export const adminGetProducts = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     return db.query.products.findMany({
       orderBy: [desc(products.createdAt)],
@@ -201,7 +195,7 @@ export const adminCreateProduct = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     const id = crypto.randomUUID();
 
@@ -267,7 +261,7 @@ export const adminUpdateProduct = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     const { id, ...updateData } = data;
 
@@ -329,10 +323,11 @@ export const adminDeleteProduct = createServerFn({ method: "POST" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     await db.delete(productImages).where(eq(productImages.productId, id));
     await db.delete(products).where(eq(products.id, id));
+    await auditAction({ actorUserId: context.session?.user.id, action: "product.deleted", entityId: id ?? undefined, entityType: "product" });
     return { success: true };
   });
 
@@ -340,7 +335,7 @@ export const adminBulkDeleteProducts = createServerFn({ method: "POST" })
   .inputValidator(z.array(z.string()).min(1).max(200))
   .middleware([authMiddleware])
   .handler(async ({ context, data: ids }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     try {
       await db
@@ -352,6 +347,7 @@ export const adminBulkDeleteProducts = createServerFn({ method: "POST" })
         "Some products are linked to orders and cannot be deleted"
       );
     }
+    await auditAction({ actorUserId: context.session?.user.id, action: "product.bulk_deleted", entityType: "product", details: { count: ids.length } });
     return { deleted: ids.length };
   });
 
@@ -365,7 +361,7 @@ export const adminUploadProductImage = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
 
     if (!IMAGE_MIME_TYPES.has(data.contentType)) {
       throw new Error("Unsupported image format");
@@ -403,7 +399,7 @@ export const adminDeleteProductImage = createServerFn({ method: "POST" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     const image = await db.query.productImages.findFirst({
       where: eq(productImages.id, id),
@@ -438,7 +434,7 @@ export const adminSetPrimaryImage = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     await db
       .update(productImages)
@@ -460,7 +456,7 @@ export const adminAddProductImages = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     const existingCount = await db
       .select({ count: count() })
@@ -484,7 +480,7 @@ export const adminAddProductImages = createServerFn({ method: "POST" })
 export const adminGetOrders = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
     return db.query.orders.findMany({
       orderBy: [desc(orders.createdAt)],
@@ -513,12 +509,13 @@ export const adminUpdateOrderStatus = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
     await db
       .update(orders)
       .set({ adminNotes: data.adminNotes ?? undefined, status: data.status })
       .where(eq(orders.id, data.id));
+    await auditAction({ actorUserId: context.session?.user.id, action: "order.status_changed", entityId: data.id ?? undefined, entityType: "order" });
     return { success: true };
   });
 
@@ -526,7 +523,7 @@ export const adminDeleteOrder = createServerFn({ method: "POST" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
     const order = await db.query.orders.findFirst({
       where: eq(orders.id, id),
@@ -539,6 +536,7 @@ export const adminDeleteOrder = createServerFn({ method: "POST" })
     }
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
     await db.delete(orders).where(eq(orders.id, id));
+    await auditAction({ actorUserId: context.session?.user.id, action: "order.deleted", entityId: id ?? undefined, entityType: "order" });
     return { success: true };
   });
 
@@ -546,7 +544,7 @@ export const adminDeleteOrder = createServerFn({ method: "POST" })
 export const adminGetEvents = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "workshops.manage");
     const db = createDb();
     return db.query.events.findMany({
       orderBy: [desc(events.startDate)],
@@ -577,7 +575,7 @@ export const adminCreateEvent = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "workshops.manage");
     const db = createDb();
     const id = crypto.randomUUID();
     await db.insert(events).values({
@@ -592,6 +590,7 @@ export const adminCreateEvent = createServerFn({ method: "POST" })
     if (event) {
       await syncWorkshopToCartProduct(db, event);
     }
+    await auditAction({ actorUserId: context.session?.user.id, action: "event.created", entityId: id, entityType: "event" });
     return { id };
   });
 
@@ -613,7 +612,7 @@ export const adminUpdateEvent = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "workshops.manage");
     const db = createDb();
     const { id, ...updateData } = data;
     let endDate: Date | null | undefined;
@@ -637,6 +636,7 @@ export const adminUpdateEvent = createServerFn({ method: "POST" })
     if (event) {
       await syncWorkshopToCartProduct(db, event);
     }
+    await auditAction({ actorUserId: context.session?.user.id, action: "event.updated", entityId: data.id ?? undefined, entityType: "event" });
     return { success: true };
   });
 
@@ -644,11 +644,12 @@ export const adminDeleteEvent = createServerFn({ method: "POST" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "workshops.manage");
     const db = createDb();
     await db.delete(productImages).where(eq(productImages.productId, id));
     await db.delete(products).where(eq(products.id, id));
     await db.delete(events).where(eq(events.id, id));
+    await auditAction({ actorUserId: context.session?.user.id, action: "event.deleted", entityId: id ?? undefined, entityType: "event" });
     return { success: true };
   });
 
@@ -656,11 +657,12 @@ export const adminBulkDeleteEvents = createServerFn({ method: "POST" })
   .inputValidator(z.array(z.string()).min(1).max(200))
   .middleware([authMiddleware])
   .handler(async ({ context, data: ids }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "workshops.manage");
     const db = createDb();
     await db.delete(productImages).where(inArray(productImages.productId, ids));
     await db.delete(products).where(inArray(products.id, ids));
     await db.delete(events).where(inArray(events.id, ids));
+    await auditAction({ actorUserId: context.session?.user.id, action: "event.bulk_deleted", entityType: "event", details: { count: ids.length } });
     return { deleted: ids.length };
   });
 
@@ -668,7 +670,7 @@ export const adminBulkDeleteEvents = createServerFn({ method: "POST" })
 export const adminGetAlterations = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "alterations.manage");
     const db = createDb();
     return db.query.alterationBookings.findMany({
       orderBy: [desc(alterationBookings.createdAt)],
@@ -691,7 +693,7 @@ export const adminUpdateAlteration = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "alterations.manage");
     const db = createDb();
     const { id, ...update } = data;
     await db
@@ -723,6 +725,7 @@ export const adminUpdateAlteration = createServerFn({ method: "POST" })
         }
       }
     }
+    await auditAction({ actorUserId: context.session?.user.id, action: "alteration.updated", entityId: data.id ?? undefined, entityType: "alteration" });
     return { success: true };
   });
 
@@ -730,7 +733,7 @@ export const adminUpdateAlteration = createServerFn({ method: "POST" })
 export const adminGetPromotions = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "marketing.manage");
     const db = createDb();
     return db.select().from(promotions).orderBy(desc(promotions.createdAt));
   });
@@ -750,7 +753,7 @@ export const adminCreatePromotion = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "marketing.manage");
     const db = createDb();
     const id = crypto.randomUUID();
     await db.insert(promotions).values({ id, ...data, isActive: true });
@@ -774,7 +777,7 @@ export const adminUpdatePromotion = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "marketing.manage");
     const db = createDb();
     const { id, ...update } = data;
     await db.update(promotions).set(update).where(eq(promotions.id, id));
@@ -785,9 +788,10 @@ export const adminDeletePromotion = createServerFn({ method: "POST" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "marketing.manage");
     const db = createDb();
     await db.delete(promotions).where(eq(promotions.id, id));
+    await auditAction({ actorUserId: context.session?.user.id, action: "promotion.deleted", entityId: id ?? undefined, entityType: "promotion" });
     return { success: true };
   });
 
@@ -795,7 +799,7 @@ export const adminDeletePromotion = createServerFn({ method: "POST" })
 export const adminGetStats = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "dashboard.view");
     const db = createDb();
 
     const [
@@ -852,7 +856,7 @@ export const adminGetOrderById = createServerFn({ method: "GET" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: orderId }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
     return db.query.orders.findFirst({
       where: eq(orders.id, orderId),
@@ -867,7 +871,7 @@ export const adminGetAlterationById = createServerFn({ method: "GET" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "alterations.manage");
     const db = createDb();
     return db.query.alterationBookings.findFirst({
       where: eq(alterationBookings.id, id),
@@ -881,7 +885,7 @@ export const adminGetEventById = createServerFn({ method: "GET" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "workshops.manage");
     const db = createDb();
     return db.query.events.findFirst({
       where: eq(events.id, id),
@@ -898,7 +902,7 @@ export const adminGetEventById = createServerFn({ method: "GET" })
 export const adminGetCustomers = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "customers.view");
     const db = createDb();
     return db.query.user.findMany({
       orderBy: [desc(user.createdAt)],
@@ -928,7 +932,7 @@ export const adminGetCustomers = createServerFn({ method: "GET" })
 export const adminGetAbandonedCarts = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
     const rows = await db.query.user.findMany({
       orderBy: [desc(user.updatedAt)],
@@ -993,7 +997,7 @@ export const adminCreateAlteration = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "alterations.manage");
     const db = createDb();
     const id = crypto.randomUUID();
     await db.insert(alterationBookings).values({
@@ -1023,7 +1027,7 @@ export const adminUpdateFooterContact = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "settings.manage");
     const db = createDb();
     const existing = await db.query.storeSettings.findFirst({
       where: eq(storeSettings.key, "footer_contact"),
@@ -1059,7 +1063,7 @@ const BUSINESS_SETUP_DONE_KEY = "business_info_confirmed";
 export const adminGetBusinessSetupState = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "settings.manage");
     const db = createDb();
     const setting = await db.query.storeSettings.findFirst({
       where: eq(storeSettings.key, BUSINESS_SETUP_DONE_KEY),
@@ -1070,7 +1074,7 @@ export const adminGetBusinessSetupState = createServerFn({ method: "GET" })
 export const adminSetBusinessSetupDone = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "settings.manage");
     const db = createDb();
     const existing = await db.query.storeSettings.findFirst({
       where: eq(storeSettings.key, BUSINESS_SETUP_DONE_KEY),
@@ -1093,7 +1097,7 @@ export const adminSetBusinessSetupDone = createServerFn({ method: "POST" })
 export const adminGetShippoSettings = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "settings.manage");
     const db = createDb();
     const setting = await db.query.storeSettings.findFirst({
       where: eq(storeSettings.key, SHIPPO_API_KEY_SETTING),
@@ -1113,7 +1117,7 @@ export const adminUpdateShippoApiKey = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "settings.manage");
     const db = createDb();
     const apiKey = data.apiKey.trim();
     if (!apiKey) {
@@ -1143,7 +1147,7 @@ export const adminUpdateShippoApiKey = createServerFn({ method: "POST" })
 export const adminClearShippoApiKey = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "settings.manage");
     const db = createDb();
     await db
       .delete(storeSettings)
@@ -1162,7 +1166,7 @@ export const adminCreateCategory = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     const id = `cat-${crypto.randomUUID().slice(0, 8)}`;
     const slug = data.name.toLowerCase().replaceAll(/[^a-z0-9-]/g, "-");
@@ -1183,9 +1187,10 @@ export const adminDeleteCategory = createServerFn({ method: "POST" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     await db.delete(categories).where(eq(categories.id, id));
+    await auditAction({ actorUserId: context.session?.user.id, action: "category.deleted", entityId: id ?? undefined, entityType: "category" });
     return { success: true };
   });
 
@@ -1201,7 +1206,7 @@ export const adminUpdateCategory = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "products.manage");
     const db = createDb();
     const { id, ...update } = data;
     await db.update(categories).set(update).where(eq(categories.id, id));
@@ -1221,7 +1226,7 @@ export const adminGetShippoRates = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
 
     const order = await db.query.orders.findFirst({
@@ -1286,7 +1291,7 @@ export const adminPurchaseShippoLabel = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
 
     const order = await db.query.orders.findFirst({
@@ -1333,7 +1338,7 @@ export const adminMarkReadyForPickup = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
 
     const order = await db.query.orders.findFirst({
@@ -1372,7 +1377,7 @@ export const adminRefundShippoLabel = createServerFn({ method: "POST" })
   )
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    requireAdmin(context);
+    requireStaffPermission(context, "orders.manage");
     const db = createDb();
 
     const order = await db.query.orders.findFirst({
