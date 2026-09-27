@@ -80,7 +80,7 @@ jobs:
           fi
 
       - name: "Destroy Preview Environment"
-        run: "bun run destroy -- --stage ${{ env.STAGE }}"
+        run: "bun run destroy -- --stage ${{ env.STAGE }} --yes"
         env:
           ALCHEMY_PASSWORD: "${{ secrets.ALCHEMY_PASSWORD }}"
           ALCHEMY_STATE_TOKEN: "${{ secrets.ALCHEMY_STATE_TOKEN }}"

@@ -188,7 +188,35 @@ export default function StaffManagement({
     }
   };
 
-  const handleResend = async (id: string) => {
+  const [suspendEmail, setSuspendEmail] = useState("");
+  const [isSuspending, setIsSuspending] = useState(false);
+
+  const handleSuspendToggle = async (banned: boolean) => {
+    if (!suspendEmail.trim()) {
+      toast.error("Enter an email address first");
+      return;
+    }
+    // oxlint-disable-next-line no-alert
+    if (
+      !confirm(
+        `${banned ? "Disable login for" : "Re-enable login for"} ${suspendEmail.trim()}?`
+      )
+    ) {
+      return;
+    }
+    setIsSuspending(true);
+    try {
+      await adminSetUserBanned({
+        data: { banned, email: suspendEmail.trim() },
+      });
+      toast.success(banned ? "Login disabled" : "Login re-enabled");
+      setSuspendEmail("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Operation failed");
+    } finally {
+      setIsSuspending(false);
+    }
+  };
     try {
       await adminResendInvite({ data: id });
       toast.success("Invitation resent");
@@ -350,6 +378,44 @@ export default function StaffManagement({
           </ul>
         </div>
       )}
+
+      <div className="rounded-xl border border-gold/10 bg-card p-6 space-y-4">
+        <h3 className="font-display text-lg text-foreground">
+          Suspend Login by Email
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Disable sign-in for any account (e.g. demo or former staff). This
+          does not delete their data.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Input
+            type="email"
+            value={suspendEmail}
+            onChange={(e) => setSuspendEmail(e.target.value)}
+            placeholder="user@example.com"
+            className="border-gold/10 flex-1"
+          />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isSuspending}
+              onClick={() => handleSuspendToggle(true)}
+            >
+              Disable
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-gold/20 text-gold hover:bg-gold/10"
+              disabled={isSuspending}
+              onClick={() => handleSuspendToggle(false)}
+            >
+              Re-enable
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {canViewAudit && auditLog && (
         <div className="rounded-xl border border-gold/10 bg-card p-6 space-y-4">
