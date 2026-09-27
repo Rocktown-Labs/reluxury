@@ -58,6 +58,7 @@ import { toast } from "sonner";
 
 import IntakeManagement from "@/components/admin/intake-management";
 import StaffManagement from "@/components/admin/staff-management";
+import RequiredMark from "@/components/required-mark";
 import CalendarAdmin from "@/components/calendar-admin";
 import {
   adminGetStats,
@@ -100,7 +101,7 @@ import {
   adminGetStaffList,
 } from "@/functions/staff";
 import { getFooterContact, getCategories } from "@/functions/store";
-import { formatPhoneDigits, stripPhoneDigits } from "@/lib/phone";
+import { formatPhoneNumber, stripPhoneDigits } from "@/lib/phone";
 import {
   adminStatsQueryOptions,
   adminProductsQueryOptions,
@@ -855,7 +856,7 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
     businessName: contact?.businessName ?? "",
     email: contact?.email ?? "",
     hours: contact?.hours ?? "",
-    phone: stripPhoneDigits(contact?.phone ?? ""),
+    phone: formatPhoneNumber(contact?.phone ?? ""),
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -881,7 +882,7 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           businessName: formData.businessName || undefined,
           email: formData.email || undefined,
           hours: formData.hours,
-          phone: formatPhoneDigits(formData.phone),
+          phone: formData.phone,
         },
       });
       await adminSetBusinessSetupDone();
@@ -932,23 +933,23 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           />
         </div>
         <div className="space-y-2">
-          <Label>Phone *</Label>
+          <Label>Phone <RequiredMark /></Label>
           <Input
             value={formData.phone}
-            inputMode="numeric"
-            maxLength={10}
+            inputMode="tel"
+            maxLength={14}
             placeholder="(501) 404-8696"
             onChange={(e) =>
               setFormData({
                 ...formData,
-                phone: stripPhoneDigits(e.target.value),
+                phone: formatPhoneNumber(e.target.value),
               })
             }
             className="border-gold/10 bg-card"
           />
         </div>
         <div className="space-y-2">
-          <Label>Address *</Label>
+          <Label>Address <RequiredMark /></Label>
           <Textarea
             value={formData.address}
             onChange={(e) =>
@@ -959,7 +960,7 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           />
         </div>
         <div className="space-y-2 sm:col-span-2">
-          <Label>Hours *</Label>
+          <Label>Hours <RequiredMark /></Label>
           <Textarea
             value={formData.hours}
             onChange={(e) =>
@@ -1860,7 +1861,7 @@ function ProductsAdmin({
           <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Title *</Label>
+                <Label>Title <RequiredMark /></Label>
                 <Input
                   value={formData.title}
                   onChange={(e) =>
@@ -1878,7 +1879,7 @@ function ProductsAdmin({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Slug *</Label>
+                <Label>Slug <RequiredMark /></Label>
                 <Input
                   value={formData.slug}
                   onChange={(e) =>
@@ -1904,7 +1905,7 @@ function ProductsAdmin({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Price *</Label>
+                <Label>Price <RequiredMark /></Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1931,7 +1932,7 @@ function ProductsAdmin({
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Category *</Label>
+                <Label>Category <RequiredMark /></Label>
                 <select
                   value={formData.categoryId}
                   onChange={(e) =>
@@ -2446,7 +2447,7 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
             className="space-y-4 mt-2"
           >
             <div className="space-y-2">
-              <Label htmlFor="cat-name">Category Name *</Label>
+              <Label htmlFor="cat-name">Category Name <RequiredMark /></Label>
               <Input
                 id="cat-name"
                 value={name}
@@ -2865,7 +2866,7 @@ function EventsAdmin({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Title *</Label>
+                <Label>Title <RequiredMark /></Label>
                 <Input
                   value={formData.title}
                   onChange={(e) =>
@@ -2881,7 +2882,7 @@ function EventsAdmin({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Slug *</Label>
+                <Label>Slug <RequiredMark /></Label>
                 <Input
                   value={formData.slug}
                   onChange={(e) =>
@@ -2906,7 +2907,7 @@ function EventsAdmin({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Start Date & Time *</Label>
+                <Label>Start Date & Time <RequiredMark /></Label>
                 <Input
                   type="datetime-local"
                   value={formData.startDate}
@@ -2931,7 +2932,7 @@ function EventsAdmin({
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Price ($) *</Label>
+                <Label>Price ($) <RequiredMark /></Label>
                 <Input
                   type="number"
                   value={formData.price}
@@ -3181,7 +3182,7 @@ function AlterationsAdmin({
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Select Customer *</Label>
+              <Label>Select Customer <RequiredMark /></Label>
               <select
                 value={manualData.userId}
                 onChange={(e) =>
@@ -3200,7 +3201,7 @@ function AlterationsAdmin({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Service Type *</Label>
+                <Label>Service Type <RequiredMark /></Label>
                 <Input
                   value={manualData.serviceType}
                   placeholder="e.g. Jeans Hemming, Suit Alterations"
@@ -3214,7 +3215,7 @@ function AlterationsAdmin({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Garment/Item Description *</Label>
+                <Label>Garment/Item Description <RequiredMark /></Label>
                 <Input
                   value={manualData.itemDescription}
                   placeholder="e.g. Levi's 501 Blue, Armani Charcoal Jacket"
@@ -3231,7 +3232,7 @@ function AlterationsAdmin({
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2 col-span-2">
-                <Label>Appointment Date *</Label>
+                <Label>Appointment Date <RequiredMark /></Label>
                 <Input
                   type="datetime-local"
                   value={manualData.preferredDate}
@@ -3873,7 +3874,7 @@ function PromotionsAdmin({
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Banner Title *</Label>
+              <Label>Banner Title <RequiredMark /></Label>
               <Input
                 value={formData.title}
                 placeholder="e.g. Summer Collection Arrivals!"
@@ -3975,7 +3976,7 @@ function SettingsAdmin({
   shippoSettings: Awaited<ReturnType<typeof adminGetShippoSettings>>;
 }) {
   const [address, setAddress] = useState(contact?.address || "");
-  const [phone, setPhone] = useState(stripPhoneDigits(contact?.phone || ""));
+  const [phone, setPhone] = useState(formatPhoneNumber(contact?.phone || ""));
   const [hours, setHours] = useState(contact?.hours || "");
   const [businessName, setBusinessName] = useState(contact?.businessName || "");
   const [email, setEmail] = useState(contact?.email || "");
@@ -4035,7 +4036,7 @@ function SettingsAdmin({
       businessName: businessName || undefined,
       email: email || undefined,
       hours,
-      phone: formatPhoneDigits(phone),
+      phone,
     });
   };
 
@@ -4094,9 +4095,9 @@ function SettingsAdmin({
             <Label>Contact Phone Number</Label>
             <Input
               value={phone}
-              inputMode="numeric"
-              maxLength={10}
-              onChange={(e: any) => setPhone(stripPhoneDigits(e.target.value))}
+              inputMode="tel"
+              maxLength={14}
+              onChange={(e: any) => setPhone(formatPhoneNumber(e.target.value))}
               placeholder="(501) 404-8696"
               className="border-gold/10 font-mono"
             />

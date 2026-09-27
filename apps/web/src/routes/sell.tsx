@@ -14,9 +14,10 @@ import {
 } from "@/functions/intake";
 import { validateConsignmentAddress } from "@/functions/address";
 import { authClient } from "@/lib/auth-client";
-import { formatPhoneDigits, optionalPhoneDigitsSchema, stripPhoneDigits } from "@/lib/phone";
+import { formatPhoneNumber, optionalPhoneSchema } from "@/lib/phone";
 import { categoriesQueryOptions } from "@/lib/queries";
 import AddressAutocomplete from "@/components/address-autocomplete";
+import RequiredMark from "@/components/required-mark";
 import SignInForm from "@/components/sign-in-form";
 import SignUpForm from "@/components/sign-up-form";
 
@@ -45,7 +46,7 @@ const CONDITIONS = ["new", "like_new", "excellent", "good", "fair"];
 const sellContactSchema = z.object({
   contactEmail: z.email("Enter a valid email address"),
   contactName: z.string().trim().min(1, "Full name is required"),
-  phone: optionalPhoneDigitsSchema,
+  phone: optionalPhoneSchema,
 });
 
 async function checkMailInAddress(input: {
@@ -196,7 +197,7 @@ function SellComponent() {
             description: item.description.trim(),
             photos: item.photos,
           })),
-          phone: phone ? formatPhoneDigits(phone) : undefined,
+          phone: phone || undefined,
           shipFromAddress:
             intakeType === "mailin"
               ? {
@@ -371,7 +372,7 @@ function SellComponent() {
           <h2 className="font-display text-lg text-foreground">Contact</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="intake-name">Full Name *</Label>
+              <Label htmlFor="intake-name">Full Name <RequiredMark /></Label>
               <Input
                 id="intake-name"
                 value={contactName}
@@ -380,7 +381,7 @@ function SellComponent() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="intake-email">Email *</Label>
+              <Label htmlFor="intake-email">Email <RequiredMark /></Label>
               <Input
                 id="intake-email"
                 type="email"
@@ -393,12 +394,12 @@ function SellComponent() {
               <Label htmlFor="intake-phone">Phone</Label>
               <Input
                 id="intake-phone"
-                inputMode="numeric"
+                inputMode="tel"
                 autoComplete="tel"
-                maxLength={10}
+                maxLength={14}
                 placeholder="(501) 404-8696"
                 value={phone}
-                onChange={(e) => setPhone(stripPhoneDigits(e.target.value))}
+                onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
                 className="border-gold/10"
               />
             </div>
@@ -411,7 +412,7 @@ function SellComponent() {
               Drop-off Appointment
             </h2>
             <div className="space-y-2">
-              <Label htmlFor="intake-appointment">Preferred Date & Time *</Label>
+              <Label htmlFor="intake-appointment">Preferred Date & Time <RequiredMark /></Label>
               <Input
                 id="intake-appointment"
                 type="datetime-local"
@@ -448,7 +449,7 @@ function SellComponent() {
             )}
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="intake-address">Street Address *</Label>
+                <Label htmlFor="intake-address">Street Address <RequiredMark /></Label>
                 <Input
                   id="intake-address"
                   autoComplete="street-address"
@@ -462,7 +463,7 @@ function SellComponent() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="intake-city">City *</Label>
+                <Label htmlFor="intake-city">City <RequiredMark /></Label>
                 <Input
                   id="intake-city"
                   value={shipCity}
@@ -472,7 +473,7 @@ function SellComponent() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="intake-state">State *</Label>
+                  <Label htmlFor="intake-state">State <RequiredMark /></Label>
                   <Input
                     id="intake-state"
                     autoComplete="address-level1"
@@ -486,7 +487,7 @@ function SellComponent() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="intake-zip">ZIP *</Label>
+                  <Label htmlFor="intake-zip">ZIP <RequiredMark /></Label>
                   <Input
                     id="intake-zip"
                     autoComplete="postal-code"
@@ -542,7 +543,7 @@ function SellComponent() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Description *</Label>
+                <Label>Description <RequiredMark /></Label>
                 <Textarea
                   value={item.description}
                   onChange={(e) =>

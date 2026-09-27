@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 
 import { createAlterationBooking } from "@/functions/alterations";
+import RequiredMark from "@/components/required-mark";
 import { authClient } from "@/lib/auth-client";
 import { footerContactQueryOptions } from "@/lib/queries";
 
@@ -198,7 +199,7 @@ function AlterationsComponent() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="serviceType">Service Type *</Label>
+                <Label htmlFor="serviceType">Service Type <RequiredMark /></Label>
                 <select
                   id="serviceType"
                   value={formData.serviceType}
@@ -218,7 +219,7 @@ function AlterationsComponent() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="itemDescription">Item Description *</Label>
+                <Label htmlFor="itemDescription">Item Description <RequiredMark /></Label>
                 <Textarea
                   id="itemDescription"
                   value={formData.itemDescription}
@@ -236,7 +237,7 @@ function AlterationsComponent() {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="preferredDate">Preferred Date *</Label>
+                  <Label htmlFor="preferredDate">Preferred Date <RequiredMark /></Label>
                   <Input
                     id="preferredDate"
                     type="date"

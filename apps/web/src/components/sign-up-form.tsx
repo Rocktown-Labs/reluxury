@@ -11,6 +11,7 @@ import { getUser } from "@/functions/get-user";
 import { authClient } from "@/lib/auth-client";
 import { clearGuestCart, getGuestCart } from "@/lib/guest-cart";
 import { queryClient } from "@/lib/query-client";
+import RequiredMark from "@/components/required-mark";
 
 import Loader from "./loader";
 
@@ -105,7 +106,10 @@ export default function SignUpForm({
           <form.Field name="name">
             {(field) => (
               <div className="space-y-2">
-                <Label htmlFor={field.name}>Name</Label>
+                <Label htmlFor={field.name}>
+                  Name
+                  <RequiredMark />
+                </Label>
                 <Input
                   id={field.name}
                   name={field.name}
@@ -127,7 +131,10 @@ export default function SignUpForm({
           <form.Field name="email">
             {(field) => (
               <div className="space-y-2">
-                <Label htmlFor={field.name}>Email</Label>
+                <Label htmlFor={field.name}>
+                  Email
+                  <RequiredMark />
+                </Label>
                 <Input
                   id={field.name}
                   name={field.name}
@@ -150,7 +157,10 @@ export default function SignUpForm({
           <form.Field name="password">
             {(field) => (
               <div className="space-y-2">
-                <Label htmlFor={field.name}>Password</Label>
+                <Label htmlFor={field.name}>
+                  Password
+                  <RequiredMark />
+                </Label>
                 <Input
                   id={field.name}
                   name={field.name}

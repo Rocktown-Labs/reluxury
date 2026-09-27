@@ -19,9 +19,10 @@ import { createOrder, getCheckoutShippingRates } from "@/functions/orders";
 import { getProductsByIds } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
 import { getGuestCart, clearGuestCart } from "@/lib/guest-cart";
-import { formatPhoneDigits, optionalPhoneDigitsSchema, stripPhoneDigits } from "@/lib/phone";
+import { formatPhoneNumber, optionalPhoneSchema } from "@/lib/phone";
 import { queryClient } from "@/lib/query-client";
 import AddressAutocomplete from "@/components/address-autocomplete";
+import RequiredMark from "@/components/required-mark";
 import { validateConsignmentAddress } from "@/functions/address";
 import { footerContactQueryOptions } from "@/lib/queries";
 import type { ShippoRate } from "@/lib/shippo";
@@ -146,7 +147,7 @@ function CheckoutComponent() {
     city: formData.city,
     email: formData.email,
     name: formData.name,
-    phone: formData.phone ? formatPhoneDigits(formData.phone) : undefined,
+    phone: formData.phone || undefined,
     state: formData.state,
     zip: formData.zip,
   });
@@ -217,7 +218,7 @@ function CheckoutComponent() {
       .object({
         email: z.email("Invalid email address"),
         name: z.string().min(1, "Full name is required"),
-        phone: optionalPhoneDigitsSchema,
+        phone: optionalPhoneSchema,
       })
       .safeParse({
         email: formData.email,
@@ -305,7 +306,7 @@ function CheckoutComponent() {
         deliveryMethod,
         email: formData.email,
         name: formData.name,
-        phone: formData.phone ? formatPhoneDigits(formData.phone) : undefined,
+        phone: formData.phone || undefined,
         selectedShippingRate: selectedShippingRate
           ? {
               amount: selectedShippingRate.amount,
@@ -422,7 +423,7 @@ function CheckoutComponent() {
             </h2>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name *</Label>
+                <Label htmlFor="name">Full Name <RequiredMark /></Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -434,7 +435,7 @@ function CheckoutComponent() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
+                <Label htmlFor="email">Email <RequiredMark /></Label>
                 <Input
                   id="email"
                   type="email"
@@ -450,14 +451,14 @@ function CheckoutComponent() {
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
-                  inputMode="numeric"
+                  inputMode="tel"
                   autoComplete="tel"
-                  maxLength={10}
+                  maxLength={14}
                   value={formData.phone}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      phone: stripPhoneDigits(e.target.value),
+                      phone: formatPhoneNumber(e.target.value),
                     })
                   }
                   className="bg-background border-gold/10"
@@ -551,7 +552,7 @@ function CheckoutComponent() {
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="address">Street Address *</Label>
+                  <Label htmlFor="address">Street Address <RequiredMark /></Label>
                   <Input
                     id="address"
                     autoComplete="street-address"
@@ -567,7 +568,7 @@ function CheckoutComponent() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="city">City *</Label>
+                  <Label htmlFor="city">City <RequiredMark /></Label>
                   <Input
                     id="city"
                     value={formData.city}
@@ -580,7 +581,7 @@ function CheckoutComponent() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="state">State *</Label>
+                  <Label htmlFor="state">State <RequiredMark /></Label>
                   <Input
                     id="state"
                     autoComplete="address-level1"
@@ -601,7 +602,7 @@ function CheckoutComponent() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="zip">ZIP Code *</Label>
+                  <Label htmlFor="zip">ZIP Code <RequiredMark /></Label>
                   <Input
                     id="zip"
                     autoComplete="postal-code"

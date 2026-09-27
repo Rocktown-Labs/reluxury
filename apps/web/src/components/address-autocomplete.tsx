@@ -8,6 +8,7 @@ import {
   searchAddresses,
 } from "@/functions/address";
 import type { AddressSuggestion } from "@/functions/address";
+import RequiredMark from "@/components/required-mark";
 
 export interface SelectedAddress {
   city: string;
@@ -84,7 +85,7 @@ export default function AddressAutocomplete({
 
   return (
     <div ref={boxRef} className="relative space-y-2">
-      <Label htmlFor={id}>Search Address *</Label>
+      <Label htmlFor={id}>Search Address <RequiredMark /></Label>
       <div className="relative">
         <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gold" />
         <Input

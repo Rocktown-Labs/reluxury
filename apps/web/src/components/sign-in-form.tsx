@@ -12,6 +12,7 @@ import { getUser } from "@/functions/get-user";
 import { authClient } from "@/lib/auth-client";
 import { clearGuestCart, getGuestCart } from "@/lib/guest-cart";
 import { queryClient } from "@/lib/query-client";
+import RequiredMark from "@/components/required-mark";
 
 import Loader from "./loader";
 
@@ -180,7 +181,10 @@ export default function SignInForm({
           <form.Field name="email">
             {(field) => (
               <div className="space-y-2">
-                <Label htmlFor={field.name}>Email</Label>
+                <Label htmlFor={field.name}>
+                  Email
+                  <RequiredMark />
+                </Label>
                 <Input
                   id={field.name}
                   name={field.name}
@@ -203,7 +207,10 @@ export default function SignInForm({
           <form.Field name="password">
             {(field) => (
               <div className="space-y-2">
-                <Label htmlFor={field.name}>Password</Label>
+                <Label htmlFor={field.name}>
+                  Password
+                  <RequiredMark />
+                </Label>
                 <Input
                   id={field.name}
                   name={field.name}
@@ -261,7 +268,10 @@ export default function SignInForm({
 
       {showForgotPassword && (
         <div className="mt-4 space-y-3 rounded-lg border border-gold/10 p-4">
-          <Label htmlFor="reset-email">Email for reset link</Label>
+          <Label htmlFor="reset-email">
+            Email for reset link
+            <RequiredMark />
+          </Label>
           <Input
             id="reset-email"
             type="email"
