@@ -2,7 +2,7 @@ import { Button } from "@reluxury/ui/components/button";
 import { Input } from "@reluxury/ui/components/input";
 import { Label } from "@reluxury/ui/components/label";
 import { Textarea } from "@reluxury/ui/components/textarea";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CheckCircle, Clock, MapPin, Phone, Scissors } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -42,6 +42,7 @@ export const Route = createFileRoute("/alterations")({
 
 function AlterationsComponent() {
   const { data: session } = authClient.useSession();
+  const navigate = useNavigate({ from: "/alterations" });
   const { data: contact } = useQuery(footerContactQueryOptions());
   const address = contact?.address ?? "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113";
   const phone = contact?.phone ?? "(501) 404-8696";
@@ -59,6 +60,7 @@ function AlterationsComponent() {
     e.preventDefault();
     if (!session) {
       toast.error("Please sign in to book an alteration");
+      await navigate({ search: { redirect: "/alterations" }, to: "/login" });
       return;
     }
     if (
@@ -190,7 +192,11 @@ function AlterationsComponent() {
             {!session && (
               <div className="p-4 rounded-lg border border-gold/10 bg-gold/5 text-sm text-muted-foreground">
                 Please{" "}
-                <Link to="/login" className="text-gold hover:underline">
+                <Link
+                  search={{ redirect: "/alterations" }}
+                  to="/login"
+                  className="text-gold hover:underline"
+                >
                   sign in
                 </Link>{" "}
                 to book an alteration.

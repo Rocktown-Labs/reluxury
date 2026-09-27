@@ -235,7 +235,10 @@ function CheckoutComponent() {
     );
     if (hasWorkshop && !session) {
       toast.error("Please sign in to reserve your workshop seat");
-      await router.navigate({ to: "/login" });
+      await router.navigate({
+        search: { redirect: "/checkout" },
+        to: "/login",
+      });
       return;
     }
     if (deliveryMethod === "shipping") {
