@@ -45,8 +45,10 @@ function GoogleIcon() {
 
 export default function SignInForm({
   onSwitchToSignUp,
+  redirectTo,
 }: {
   onSwitchToSignUp: () => void;
+  redirectTo?: string;
 }) {
   const navigate = useNavigate({
     from: "/",
@@ -59,6 +61,10 @@ export default function SignInForm({
 
   const navigateByRole = async () => {
     await syncPostAuthState();
+    if (redirectTo) {
+      await navigate({ to: redirectTo });
+      return;
+    }
     const session = await getUser();
     if (session?.user.role === "admin") {
       await navigate({ to: "/admin" });
@@ -102,7 +108,7 @@ export default function SignInForm({
 
   const handleGoogleSignIn = async () => {
     await authClient.signIn.social(
-      { callbackURL: "/dashboard", provider: "google" },
+      { callbackURL: redirectTo ?? "/dashboard", provider: "google" },
       {
         onError: (error) => {
           toast.error(error.error.message || "Google sign-in unavailable");

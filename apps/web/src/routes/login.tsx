@@ -7,6 +7,7 @@ import SignUpForm from "@/components/sign-up-form";
 
 const searchSchema = z.object({
   mode: z.enum(["signin", "signup"]).optional(),
+  redirect: z.string().optional(),
 });
 
 export const Route = createFileRoute("/login")({
@@ -14,13 +15,27 @@ export const Route = createFileRoute("/login")({
   validateSearch: searchSchema,
 });
 
+function getSafeRedirect(redirect: string | undefined): string | undefined {
+  if (!redirect || !redirect.startsWith("/") || redirect.startsWith("//")) {
+    return undefined;
+  }
+  return redirect;
+}
+
 function RouteComponent() {
-  const { mode } = Route.useSearch();
+  const { mode, redirect } = Route.useSearch();
   const [showSignIn, setShowSignIn] = useState(mode !== "signup");
+  const redirectTo = getSafeRedirect(redirect);
 
   return showSignIn ? (
-    <SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
+    <SignInForm
+      onSwitchToSignUp={() => setShowSignIn(false)}
+      redirectTo={redirectTo}
+    />
   ) : (
-    <SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
+    <SignUpForm
+      onSwitchToSignIn={() => setShowSignIn(true)}
+      redirectTo={redirectTo}
+    />
   );
 }

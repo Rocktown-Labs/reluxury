@@ -6,13 +6,19 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import {
   submitIntake,
   uploadIntakePhoto,
 } from "@/functions/intake";
+import { validateConsignmentAddress } from "@/functions/address";
 import { authClient } from "@/lib/auth-client";
+import { formatPhoneNumber, optionalPhoneSchema } from "@/lib/phone";
 import { categoriesQueryOptions } from "@/lib/queries";
+import AddressAutocomplete from "@/components/address-autocomplete";
+import SignInForm from "@/components/sign-in-form";
+import SignUpForm from "@/components/sign-up-form";
 
 export const Route = createFileRoute("/sell")({
   component: SellComponent,
@@ -35,6 +41,30 @@ const EMPTY_ITEM: IntakeItemDraft = {
 };
 
 const CONDITIONS = ["new", "like_new", "excellent", "good", "fair"];
+
+const sellContactSchema = z.object({
+  contactEmail: z.email("Enter a valid email address"),
+  contactName: z.string().trim().min(1, "Full name is required"),
+  phone: optionalPhoneSchema,
+});
+
+async function checkMailInAddress(input: {
+  city: string;
+  state: string;
+  street: string;
+  zip: string;
+}): Promise<{ error?: string; notice?: string }> {
+  if (!input.street || !input.city || !input.state || !input.zip) {
+    return { error: "Add the address you will ship from" };
+  }
+  const validation = await validateConsignmentAddress({ data: input });
+  if (!validation.success) {
+    return { error: validation.message };
+  }
+  return validation.standardizedAddress
+    ? { notice: validation.standardizedAddress }
+    : {};
+}
 
 function readFileAsBase64(file: File): Promise<string> {
   // oxlint-disable-next-line promise/avoid-new
@@ -65,6 +95,9 @@ function SellComponent() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false);
+  const [addressSearch, setAddressSearch] = useState("");
+  const [addressNotice, setAddressNotice] = useState("");
 
   const totalPhotos = items.reduce((total, item) => total + item.photos.length, 0);
 
@@ -117,8 +150,17 @@ function SellComponent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contactName.trim() || !contactEmail.trim()) {
-      toast.error("Name and email are required");
+    const contact = sellContactSchema.safeParse({
+      contactEmail: contactEmail.trim(),
+      contactName,
+      phone: phone || undefined,
+    });
+    if (!contact.success) {
+      toast.error(contact.error.issues[0]?.message ?? "Check your contact info");
+      return;
+    }
+    if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone)) {
+      toast.error("Enter a 10-digit phone number");
       return;
     }
     if (items.some((item) => !item.description.trim())) {
@@ -129,12 +171,20 @@ function SellComponent() {
       toast.error("Choose a drop-off appointment time");
       return;
     }
-    if (
-      intakeType === "mailin" &&
-      (!shipAddress.trim() || !shipCity.trim() || !shipState.trim() || !shipZip.trim())
-    ) {
-      toast.error("Add the address you will ship from");
-      return;
+    if (intakeType === "mailin") {
+      const checked = await checkMailInAddress({
+        city: shipCity.trim(),
+        state: shipState.trim(),
+        street: shipAddress.trim(),
+        zip: shipZip.trim(),
+      });
+      if (checked.error) {
+        toast.error(checked.error);
+        return;
+      }
+      if (checked.notice) {
+        setAddressNotice(checked.notice);
+      }
     }
     setIsSubmitting(true);
     try {
@@ -182,16 +232,86 @@ function SellComponent() {
 
   if (!session) {
     return (
-      <div className="container mx-auto max-w-xl px-4 py-20 text-center space-y-4">
-        <h1 className="font-display text-3xl font-light">Sell to ReLUXURY</h1>
-        <p className="text-muted-foreground">
-          Sign in to submit items for consignment review.
-        </p>
-        <Link to="/login">
-          <Button className="bg-gold text-primary-foreground hover:bg-gold-dark">
-            Sign In
-          </Button>
-        </Link>
+      <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-12">
+        <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
+          <div className="space-y-8">
+            <div className="overflow-hidden rounded-2xl border border-gold/10">
+              <img
+                alt="Inside the ReLUXURY boutique"
+                className="h-72 w-full object-cover sm:h-96"
+                src="/hero-boutique.png"
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">
+                Consignment Intake
+              </p>
+              <h1 className="font-display text-3xl lg:text-4xl font-light text-foreground">
+                Sell to ReLUXURY
+              </h1>
+              <p className="text-muted-foreground">
+                Send photos ahead of time — drop off in store or mail your
+                pieces from anywhere in the US. We review every submission
+                and reply within 2 business days.
+              </p>
+            </div>
+            <ol className="space-y-4">
+              {[
+                {
+                  step: "1",
+                  text: "Submit photos, brand, and condition in minutes.",
+                  title: "Tell us what you have",
+                },
+                {
+                  step: "2",
+                  text: "Approve the number or drop off in person — your call.",
+                  title: "Get an offer",
+                },
+                {
+                  step: "3",
+                  text: "Mail-in sellers get a prepaid label straight to their inbox.",
+                  title: "Ship or drop off",
+                },
+              ].map((item) => (
+                <li
+                  key={item.step}
+                  className="flex gap-4 rounded-xl border border-gold/10 bg-card p-4"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold/15 font-display text-sm text-gold">
+                    {item.step}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">
+                      {item.title}
+                    </span>
+                    <span className="block text-sm text-muted-foreground">
+                      {item.text}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="lg:sticky lg:top-24">
+            <div className="rounded-2xl border border-gold/15 bg-card p-2 sm:p-4">
+              {showSignUp ? (
+                <SignUpForm
+                  onSwitchToSignIn={() => setShowSignUp(false)}
+                  redirectTo="/sell"
+                />
+              ) : (
+                <SignInForm
+                  onSwitchToSignUp={() => setShowSignUp(true)}
+                  redirectTo="/sell"
+                />
+              )}
+            </div>
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              Signing in keeps you right here — your intake form appears
+              after you&apos;re in.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -277,8 +397,22 @@ function SellComponent() {
               <Label htmlFor="intake-phone">Phone</Label>
               <Input
                 id="intake-phone"
+                inputMode="tel"
+                autoComplete="tel"
+                maxLength={14}
+                placeholder="(501) 555-0123"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
+                onKeyDown={(e) => {
+                  if (
+                    /[a-zA-Z]/.test(e.key) &&
+                    !e.metaKey &&
+                    !e.ctrlKey &&
+                    e.key.length === 1
+                  ) {
+                    e.preventDefault();
+                  }
+                }}
                 className="border-gold/10"
               />
             </div>
@@ -310,13 +444,34 @@ function SellComponent() {
               If we accept your pieces, we&apos;ll email you a prepaid
               shipping label for this address.
             </p>
+            <AddressAutocomplete
+              id="intake-address-search"
+              onChange={setAddressSearch}
+              onSelect={(selected) => {
+                setShipAddress(selected.street);
+                setShipCity(selected.city);
+                setShipState(selected.state);
+                setShipZip(selected.zip);
+              }}
+              value={addressSearch}
+            />
+            {addressNotice && (
+              <p className="text-xs text-gold">
+                Verified as: {addressNotice}
+              </p>
+            )}
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="intake-address">Street Address *</Label>
                 <Input
                   id="intake-address"
+                  autoComplete="street-address"
+                  placeholder="123 Main St, Apt 4"
                   value={shipAddress}
-                  onChange={(e) => setShipAddress(e.target.value)}
+                  onChange={(e) => {
+                    setShipAddress(e.target.value);
+                    setAddressSearch(e.target.value);
+                  }}
                   className="border-gold/10"
                 />
               </div>
@@ -334,17 +489,28 @@ function SellComponent() {
                   <Label htmlFor="intake-state">State *</Label>
                   <Input
                     id="intake-state"
+                    autoComplete="address-level1"
+                    maxLength={2}
+                    placeholder="AR"
                     value={shipState}
-                    onChange={(e) => setShipState(e.target.value)}
-                    className="border-gold/10"
+                    onChange={(e) =>
+                      setShipState(e.target.value.toUpperCase().replaceAll(/[^A-Z]/g, ""))
+                    }
+                    className="border-gold/10 uppercase"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="intake-zip">ZIP *</Label>
                   <Input
                     id="intake-zip"
+                    autoComplete="postal-code"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="72113"
                     value={shipZip}
-                    onChange={(e) => setShipZip(e.target.value)}
+                    onChange={(e) =>
+                      setShipZip(e.target.value.replaceAll(/[^\d-]/g, ""))
+                    }
                     className="border-gold/10"
                   />
                 </div>
@@ -419,7 +585,7 @@ function SellComponent() {
                     onChange={(e) =>
                       updateItem(index, { category: e.target.value })
                     }
-                    className="flex h-10 w-full rounded-md border border-gold/10 bg-background px-3 py-2 text-sm text-foreground"
+                    className="flex h-10 w-full rounded-xl border border-gold/10 bg-background px-3 py-2 text-sm text-foreground"
                   >
                     <option value="">Select</option>
                     {(categories ?? []).map((cat) => (
@@ -436,7 +602,7 @@ function SellComponent() {
                     onChange={(e) =>
                       updateItem(index, { condition: e.target.value })
                     }
-                    className="flex h-10 w-full rounded-md border border-gold/10 bg-background px-3 py-2 text-sm text-foreground"
+                    className="flex h-10 w-full rounded-xl border border-gold/10 bg-background px-3 py-2 text-sm text-foreground"
                   >
                     {CONDITIONS.map((condition) => (
                       <option key={condition} value={condition}>

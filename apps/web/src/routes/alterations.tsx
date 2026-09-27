@@ -205,7 +205,7 @@ function AlterationsComponent() {
                   onChange={(e) =>
                     setFormData({ ...formData, serviceType: e.target.value })
                   }
-                  className="flex h-10 w-full rounded-md border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
+                  className="flex h-10 w-full rounded-xl border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
                   required
                 >
                   <option value="">Select a service</option>
@@ -262,7 +262,7 @@ function AlterationsComponent() {
                         preferredTime: e.target.value,
                       })
                     }
-                    className="flex h-10 w-full rounded-md border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
+                    className="flex h-10 w-full rounded-xl border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
                   >
                     <option value="">Select time</option>
                     {TIME_SLOTS.map((t) => (

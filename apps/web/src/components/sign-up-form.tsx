@@ -16,8 +16,10 @@ import Loader from "./loader";
 
 export default function SignUpForm({
   onSwitchToSignIn,
+  redirectTo,
 }: {
   onSwitchToSignIn: () => void;
+  redirectTo?: string;
 }) {
   const navigate = useNavigate({
     from: "/",
@@ -58,6 +60,11 @@ export default function SignUpForm({
           },
           onSuccess: async () => {
             await syncPostAuthState();
+            if (redirectTo) {
+              await navigate({ to: redirectTo });
+              toast.success("Sign up successful");
+              return;
+            }
             const session = await getUser();
             if (session?.user.role === "admin") {
               await navigate({ to: "/admin" });

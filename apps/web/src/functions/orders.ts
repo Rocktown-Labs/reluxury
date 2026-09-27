@@ -23,9 +23,20 @@ import { shippo } from "@/lib/shippo";
 import type { ShippoRate } from "@/lib/shippo";
 import { authMiddleware } from "@/middleware/auth";
 
+const optionalMaskedPhone = z
+  .string()
+  .optional()
+  .refine(
+    (value) =>
+      value === undefined ||
+      value === "" ||
+      /^\(\d{3}\) \d{3}-\d{4}$/.test(value),
+    "Enter a 10-digit phone number"
+  );
+
 const orderInputSchema = z.object({
   deliveryMethod: z.enum(["pickup", "shipping"]),
-  email: z.string(),
+  email: z.email("Enter a valid email address"),
   guestItems: z
     .array(
       z.object({
@@ -35,8 +46,8 @@ const orderInputSchema = z.object({
       })
     )
     .optional(),
-  name: z.string(),
-  phone: z.string().optional(),
+  name: z.string().trim().min(1, "Full name is required"),
+  phone: optionalMaskedPhone,
   selectedShippingRate: z
     .object({
       amount: z.string(),
@@ -48,13 +59,13 @@ const orderInputSchema = z.object({
     .optional(),
   shippingAddress: z
     .object({
-      address: z.string(),
-      city: z.string(),
-      email: z.string(),
-      name: z.string(),
-      phone: z.string().optional(),
-      state: z.string(),
-      zip: z.string(),
+      address: z.string().trim().min(1, "Street address is required"),
+      city: z.string().trim().min(1, "City is required"),
+      email: z.email("Enter a valid email address"),
+      name: z.string().trim().min(1, "Full name is required"),
+      phone: optionalMaskedPhone,
+      state: z.string().trim().min(1, "State is required"),
+      zip: z.string().trim().min(3, "Enter a valid ZIP code"),
     })
     .optional(),
 });

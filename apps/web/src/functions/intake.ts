@@ -86,16 +86,25 @@ export const submitIntake = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       appointmentAt: z.string().datetime().optional(),
-      contactEmail: z.string().email(),
-      contactName: z.string().min(1),
+      contactEmail: z.email("Enter a valid email address"),
+      contactName: z.string().trim().min(1, "Full name is required"),
       items: z.array(intakeItemSchema).min(1).max(20),
-      phone: z.string().optional(),
+      phone: z
+        .string()
+        .optional()
+        .refine(
+          (value) =>
+            value === undefined ||
+            value === "" ||
+            /^\(\d{3}\) \d{3}-\d{4}$/.test(value),
+          "Enter a 10-digit phone number"
+        ),
       shipFromAddress: z
         .object({
-          address: z.string(),
-          city: z.string(),
-          state: z.string(),
-          zip: z.string(),
+          address: z.string().trim().min(1, "Street address is required"),
+          city: z.string().trim().min(1, "City is required"),
+          state: z.string().trim().min(1, "State is required"),
+          zip: z.string().trim().min(3, "Enter a valid ZIP code"),
         })
         .optional(),
       type: z.enum(["dropoff", "mailin"]),

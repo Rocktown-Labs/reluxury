@@ -1,4 +1,4 @@
-/* oxlint-disable no-use-before-define, no-array-reduce, func-style */
+/* oxlint-disable no-use-before-define, no-array-reduce, func-style, complexity */
 import { Button } from "@reluxury/ui/components/button";
 import { Input } from "@reluxury/ui/components/input";
 import { Label } from "@reluxury/ui/components/label";
@@ -12,13 +12,17 @@ import { ArrowLeft, MapPin, Truck, CreditCard } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { getCart } from "@/functions/cart";
 import { createOrder, getCheckoutShippingRates } from "@/functions/orders";
 import { getProductsByIds } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
 import { getGuestCart, clearGuestCart } from "@/lib/guest-cart";
+import { formatPhoneNumber, optionalPhoneSchema } from "@/lib/phone";
 import { queryClient } from "@/lib/query-client";
+import AddressAutocomplete from "@/components/address-autocomplete";
+import { validateConsignmentAddress } from "@/functions/address";
 import { footerContactQueryOptions } from "@/lib/queries";
 import type { ShippoRate } from "@/lib/shippo";
 
@@ -69,6 +73,7 @@ function CheckoutComponent() {
     state: "",
     zip: "",
   });
+  const [addressSearch, setAddressSearch] = useState("");
 
   const [guestItems, setGuestItems] = useState<CheckoutItem[]>([]);
   const [isLoadingGuest, setIsLoadingGuest] = useState(true);
@@ -147,15 +152,29 @@ function CheckoutComponent() {
   });
 
   const handleGetShippingRates = async () => {
+    const address = z
+      .object({
+        address: z.string().trim().min(1, "Street address is required"),
+        city: z.string().trim().min(1, "City is required"),
+        state: z.string().trim().min(1, "State is required"),
+        zip: z.string().trim().min(3, "Enter a valid ZIP code"),
+      })
+      .safeParse({
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zip,
+      });
     if (
       !formData.name ||
       !formData.email ||
-      !formData.address ||
-      !formData.city ||
-      !formData.state ||
-      !formData.zip
+      !address.success
     ) {
-      toast.error("Complete the shipping address to see delivery rates");
+      toast.error(
+        address.success === false
+          ? (address.error.issues[0]?.message ?? "Complete the shipping address to see delivery rates")
+          : "Complete the shipping address to see delivery rates"
+      );
       return;
     }
 
@@ -194,8 +213,19 @@ function CheckoutComponent() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.email) {
-      toast.error("Please fill in all required fields");
+    const contactInfo = z
+      .object({
+        email: z.email("Invalid email address"),
+        name: z.string().min(1, "Full name is required"),
+        phone: optionalPhoneSchema,
+      })
+      .safeParse({
+        email: formData.email,
+        name: formData.name,
+        phone: formData.phone || undefined,
+      });
+    if (!contactInfo.success) {
+      toast.error(contactInfo.error.issues[0]?.message ?? "Check your contact info");
       return;
     }
     // Workshop seats are tied to an account — guests must sign in first
@@ -207,12 +237,36 @@ function CheckoutComponent() {
       await router.navigate({ to: "/login" });
       return;
     }
-    if (
-      deliveryMethod === "shipping" &&
-      (!formData.address || !formData.city || !formData.state || !formData.zip)
-    ) {
-      toast.error("Please fill in your shipping address");
-      return;
+    if (deliveryMethod === "shipping") {
+      const address = z
+        .object({
+          address: z.string().trim().min(1, "Street address is required"),
+          city: z.string().trim().min(1, "City is required"),
+          state: z.string().trim().min(1, "State is required"),
+          zip: z.string().trim().min(3, "Enter a valid ZIP code"),
+        })
+        .safeParse({
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zip: formData.zip,
+        });
+      if (!address.success) {
+        toast.error(address.error.issues[0]?.message ?? "Please fill in your shipping address");
+        return;
+      }
+      const validation = await validateConsignmentAddress({
+        data: {
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+          street: formData.address.trim(),
+          zip: formData.zip.trim(),
+        },
+      });
+      if (!validation.success) {
+        toast.error(validation.message);
+        return;
+      }
     }
     if (deliveryMethod === "shipping" && !selectedShippingRate) {
       toast.error("Please choose a shipping rate");
@@ -396,10 +450,26 @@ function CheckoutComponent() {
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  maxLength={14}
                   value={formData.phone}
                   onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
+                    setFormData({
+                      ...formData,
+                      phone: formatPhoneNumber(e.target.value),
+                    })
                   }
+                  onKeyDown={(e) => {
+                    if (
+                      /[a-zA-Z]/.test(e.key) &&
+                      !e.metaKey &&
+                      !e.ctrlKey &&
+                      e.key.length === 1
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="bg-background border-gold/10"
                   placeholder="(501) 404-8696"
                 />
@@ -467,12 +537,39 @@ function CheckoutComponent() {
               </h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2 sm:col-span-2">
+                  <AddressAutocomplete
+                    id="checkout-address-search"
+                    onChange={(value) => {
+                      setAddressSearch(value);
+                      setFormData({ ...formData, address: value });
+                      setShippingRates([]);
+                      setSelectedRateId("");
+                    }}
+                    onSelect={(selected) => {
+                      setAddressSearch(selected.street);
+                      setFormData({
+                        ...formData,
+                        address: selected.street,
+                        city: selected.city,
+                        state: selected.state,
+                        zip: selected.zip,
+                      });
+                      setShippingRates([]);
+                      setSelectedRateId("");
+                    }}
+                    value={addressSearch || formData.address}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="address">Street Address *</Label>
                   <Input
                     id="address"
+                    autoComplete="street-address"
+                    placeholder="123 Main St, Apt 4"
                     value={formData.address}
                     onChange={(e) => {
                       setFormData({ ...formData, address: e.target.value });
+                      setAddressSearch(e.target.value);
                       setShippingRates([]);
                       setSelectedRateId("");
                     }}
@@ -496,22 +593,37 @@ function CheckoutComponent() {
                   <Label htmlFor="state">State *</Label>
                   <Input
                     id="state"
+                    autoComplete="address-level1"
+                    maxLength={2}
+                    placeholder="AR"
                     value={formData.state}
                     onChange={(e) => {
-                      setFormData({ ...formData, state: e.target.value });
+                      setFormData({
+                        ...formData,
+                        state: e.target.value
+                          .toUpperCase()
+                          .replaceAll(/[^A-Z]/g, ""),
+                      });
                       setShippingRates([]);
                       setSelectedRateId("");
                     }}
-                    className="bg-background border-gold/10"
+                    className="bg-background border-gold/10 uppercase"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="zip">ZIP Code *</Label>
                   <Input
                     id="zip"
+                    autoComplete="postal-code"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="72113"
                     value={formData.zip}
                     onChange={(e) => {
-                      setFormData({ ...formData, zip: e.target.value });
+                      setFormData({
+                        ...formData,
+                        zip: e.target.value.replaceAll(/[^\d-]/g, ""),
+                      });
                       setSelectedRateId("");
                       setShippingRates([]);
                     }}

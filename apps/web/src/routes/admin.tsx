@@ -100,6 +100,7 @@ import {
   adminGetStaffList,
 } from "@/functions/staff";
 import { getFooterContact, getCategories } from "@/functions/store";
+import { formatPhoneNumber } from "@/lib/phone";
 import {
   adminStatsQueryOptions,
   adminProductsQueryOptions,
@@ -930,8 +931,14 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           <Label>Phone *</Label>
           <Input
             value={formData.phone}
+            inputMode="tel"
+            maxLength={14}
+            placeholder="(501) 555-0123"
             onChange={(e) =>
-              setFormData({ ...formData, phone: e.target.value })
+              setFormData({
+                ...formData,
+                phone: formatPhoneNumber(e.target.value),
+              })
             }
             className="border-gold/10 bg-card"
           />
@@ -4079,8 +4086,10 @@ function SettingsAdmin({
             <Label>Contact Phone Number</Label>
             <Input
               value={phone}
-              onChange={(e: any) => setPhone(e.target.value)}
-              placeholder="Phone number"
+              inputMode="tel"
+              maxLength={14}
+              onChange={(e: any) => setPhone(formatPhoneNumber(e.target.value))}
+              placeholder="(501) 555-0123"
               className="border-gold/10 font-mono"
             />
           </div>
