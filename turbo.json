@@ -21,7 +21,8 @@
     "RESEND_WEBHOOK_SECRET",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
-    "RADAR_SECRET_KEY"
+    "RADAR_SECRET_KEY",
+    "TURNSTILE_SECRET_KEY"
   ],
   "tasks": {
     "build": {

@@ -36,6 +36,7 @@ jobs:
           RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
           RADAR_SECRET_KEY=${{ secrets.RADAR_SECRET_KEY }}
+          TURNSTILE_SECRET_KEY=${{ secrets.TURNSTILE_SECRET_KEY }}
           EOF
 
       - name: "Deploy"
@@ -54,6 +55,7 @@ jobs:
           GOOGLE_CLIENT_ID: "${{ secrets.GOOGLE_CLIENT_ID }}"
           GOOGLE_CLIENT_SECRET: "${{ secrets.GOOGLE_CLIENT_SECRET }}"
           RADAR_SECRET_KEY: "${{ secrets.RADAR_SECRET_KEY }}"
+          TURNSTILE_SECRET_KEY: "${{ secrets.TURNSTILE_SECRET_KEY }}"
           PULL_REQUEST: "${{ github.event.number }}"
           GITHUB_SHA: "${{ github.sha }}"
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
@@ -97,4 +99,5 @@ jobs:
           GOOGLE_CLIENT_ID: "${{ secrets.GOOGLE_CLIENT_ID }}"
           GOOGLE_CLIENT_SECRET: "${{ secrets.GOOGLE_CLIENT_SECRET }}"
           RADAR_SECRET_KEY: "${{ secrets.RADAR_SECRET_KEY }}"
+          TURNSTILE_SECRET_KEY: "${{ secrets.TURNSTILE_SECRET_KEY }}"
           PULL_REQUEST: "${{ github.event.number }}"

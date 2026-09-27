@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -30,6 +31,11 @@ import { Route as AdminWorkshopsWorkshopIdRouteImport } from './routes/admin.wor
 import { Route as AdminOrdersOrderIdRouteImport } from './routes/admin.orders.$orderId'
 import { Route as AdminAlterationsAlterationIdRouteImport } from './routes/admin.alterations.$alterationId'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ShopRoute = ShopRouteImport.update({
   id: '/shop',
   path: '/shop',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/sell': typeof SellRoute
   '/shop': typeof ShopRouteWithChildren
+  '/signup': typeof SignupRoute
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
   '/admin/alterations/$alterationId': typeof AdminAlterationsAlterationIdRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/sell': typeof SellRoute
   '/shop': typeof ShopRouteWithChildren
+  '/signup': typeof SignupRoute
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
   '/admin/alterations/$alterationId': typeof AdminAlterationsAlterationIdRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/sell': typeof SellRoute
   '/shop': typeof ShopRouteWithChildren
+  '/signup': typeof SignupRoute
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
   '/admin/alterations/$alterationId': typeof AdminAlterationsAlterationIdRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sell'
     | '/shop'
+    | '/signup'
     | '/events/$slug'
     | '/shop/$slug'
     | '/admin/alterations/$alterationId'
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sell'
     | '/shop'
+    | '/signup'
     | '/events/$slug'
     | '/shop/$slug'
     | '/admin/alterations/$alterationId'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sell'
     | '/shop'
+    | '/signup'
     | '/events/$slug'
     | '/shop/$slug'
     | '/admin/alterations/$alterationId'
@@ -283,12 +295,20 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SellRoute: typeof SellRoute
   ShopRoute: typeof ShopRouteWithChildren
+  SignupRoute: typeof SignupRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiWebhooksResendRoute: typeof ApiWebhooksResendRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/shop': {
       id: '/shop'
       path: '/shop'
@@ -481,6 +501,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SellRoute: SellRoute,
   ShopRoute: ShopRouteWithChildren,
+  SignupRoute: SignupRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiWebhooksResendRoute: ApiWebhooksResendRoute,
 }

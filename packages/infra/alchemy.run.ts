@@ -92,6 +92,9 @@ export const Web = Cloudflare.Website.Vite(
         RESEND_WEBHOOK_SECRET: Config.Redacted("RESEND_WEBHOOK_SECRET").pipe(
           Config.withDefault(Redacted.make(""))
         ),
+        TURNSTILE_SECRET_KEY: Config.Redacted("TURNSTILE_SECRET_KEY").pipe(
+          Config.withDefault(Redacted.make(""))
+        ),
       },
       name: isProd ? "reluxury-web" : `reluxury-web-${stack.stage}`,
       observability: {
