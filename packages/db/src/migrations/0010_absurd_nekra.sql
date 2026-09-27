@@ -1,0 +1,1 @@
+ALTER TABLE `intake_submissions` ADD `items` text DEFAULT '[]' NOT NULL;

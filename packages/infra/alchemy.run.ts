@@ -34,11 +34,27 @@ export const Web = Cloudflare.Website.Vite(
   "web",
   Stack.useSync((stack) => {
     const isProd = stack.stage === "prod";
+    const isPreview =
+      typeof stack.stage === "string" && stack.stage.startsWith("pr-");
+    const previewDomain = `${stack.stage}.${PROD_DOMAIN}`;
     // Non-prod stages (PR previews, dev) use their own worker URL so auth
     // cookies and origin checks work on the preview hostname.
-    const baseUrl = isProd
-      ? `https://${PROD_DOMAIN}`
-      : Cloudflare.Worker.URL;
+    // PR previews get a first-party subdomain (pr-<n>.reluxury.shop) so
+    // OAuth callbacks and cookies behave like production.
+    let baseUrl: string;
+    if (isProd) {
+      baseUrl = `https://${PROD_DOMAIN}`;
+    } else if (isPreview) {
+      baseUrl = `https://${previewDomain}`;
+    } else {
+      baseUrl = Cloudflare.Worker.URL;
+    }
+    let domain: { aliases?: string[]; name: string } | undefined;
+    if (isProd) {
+      domain = { aliases: [`www.${PROD_DOMAIN}`], name: PROD_DOMAIN };
+    } else if (isPreview) {
+      domain = { name: previewDomain };
+    }
     return {
       dev: {
         host: process.env.HOST ?? "127.0.0.1",
@@ -46,16 +62,13 @@ export const Web = Cloudflare.Website.Vite(
       },
       // Custom domain: zone reluxury.shop already exists in the account,
       // so Cloudflare provisions DNS + certificates automatically.
-      domain: isProd
-        ? { aliases: [`www.${PROD_DOMAIN}`], name: PROD_DOMAIN }
-        : undefined,
+      domain,
       env: {
         ADMIN_EMAILS: process.env.ADMIN_EMAILS ?? "admin@reluxury.shop",
         BETTER_AUTH_SECRET: Config.Redacted("BETTER_AUTH_SECRET"),
         BETTER_AUTH_URL: baseUrl,
-        CORS_ORIGIN: isProd
-          ? baseUrl
-          : Cloudflare.Worker.URL,
+        CORS_ORIGIN:
+          isProd || isPreview ? baseUrl : Cloudflare.Worker.URL,
         DB: Database,
         GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ?? "",
         GOOGLE_CLIENT_SECRET: Config.Redacted("GOOGLE_CLIENT_SECRET").pipe(
@@ -70,10 +83,16 @@ export const Web = Cloudflare.Website.Vite(
           (stack.stage === "prod"
             ? "https://pub-0cbd5b44f2c542f2b59bf4e8bca2ffa4.r2.dev"
             : ""),
+        RADAR_SECRET_KEY: Config.Redacted("RADAR_SECRET_KEY").pipe(
+          Config.withDefault(Redacted.make(""))
+        ),
         RESEND_API_KEY: Config.Redacted("RESEND_API_KEY").pipe(
           Config.withDefault(Redacted.make(""))
         ),
         RESEND_WEBHOOK_SECRET: Config.Redacted("RESEND_WEBHOOK_SECRET").pipe(
+          Config.withDefault(Redacted.make(""))
+        ),
+        TURNSTILE_SECRET_KEY: Config.Redacted("TURNSTILE_SECRET_KEY").pipe(
           Config.withDefault(Redacted.make(""))
         ),
       },

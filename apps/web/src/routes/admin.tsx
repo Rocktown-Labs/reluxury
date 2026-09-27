@@ -56,7 +56,9 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
+import IntakeManagement from "@/components/admin/intake-management";
 import StaffManagement from "@/components/admin/staff-management";
+import RequiredMark from "@/components/required-mark";
 import CalendarAdmin from "@/components/calendar-admin";
 import {
   adminGetStats,
@@ -93,11 +95,13 @@ import {
   adminSetBusinessSetupDone,
 } from "@/functions/admin";
 import { getUser } from "@/functions/get-user";
+import { adminGetIntakes } from "@/functions/intake";
 import {
   adminGetAuditLog,
   adminGetStaffList,
 } from "@/functions/staff";
 import { getFooterContact, getCategories } from "@/functions/store";
+import { formatPhoneNumber, stripPhoneDigits } from "@/lib/phone";
 import {
   adminStatsQueryOptions,
   adminProductsQueryOptions,
@@ -112,6 +116,7 @@ import {
   adminStaffListQueryOptions,
   adminStaffMeQueryOptions,
   adminAuditLogQueryOptions,
+  adminIntakesQueryOptions,
   footerContactQueryOptions,
   categoriesQueryOptions,
 } from "@/lib/queries";
@@ -145,6 +150,7 @@ export const TAB_PERMISSIONS: Record<string, string | null> = {
   customers: "customers.view",
   dashboard: null,
   events: "workshops.manage",
+  intake: "intake.manage",
   orders: "orders.manage",
   products: "products.manage",
   promotions: "marketing.manage",
@@ -202,6 +208,7 @@ export const Route = createFileRoute("/admin")({
       shippoSettings,
       staffList,
       auditLog,
+      intakes,
     ] = await Promise.all([
       maybe("dashboard", () => adminGetStats()),
       maybe("products", () => adminGetProducts()),
@@ -218,6 +225,7 @@ export const Route = createFileRoute("/admin")({
       allow("staff") || allow("dashboard")
         ? adminGetAuditLog().catch(() => null)
         : Promise.resolve(null),
+      maybe("intake", () => adminGetIntakes()),
     ]);
     const staffRole = (session?.staff as { role?: string } | undefined)?.role;
     const viewerIsFullAdmin =
@@ -232,6 +240,7 @@ export const Route = createFileRoute("/admin")({
       contact,
       customers,
       events,
+      intakes,
       orders,
       products,
       promotions,
@@ -421,6 +430,13 @@ function AdminDashboard() {
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
+  const { data: intakes, isLoading: intakesLoading } = useQuery({
+    ...adminIntakesQueryOptions(),
+    enabled: canSeeTab("intake"),
+    initialData: loaderData.intakes,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
+  });
+
   const canViewAudit = isFullAdmin || myPermissions.includes("audit.view");
   const { data: auditLog } = useQuery({
     ...adminAuditLogQueryOptions(),
@@ -444,6 +460,9 @@ function AdminDashboard() {
       return !Number.isNaN(start) && start >= Date.now();
     }).length ?? 0;
 
+  const pendingIntakeCount =
+    intakes?.filter((intake: any) => intake.status === "pending").length ?? 0;
+
   const tabs = [
     { icon: LayoutDashboard, label: "Dashboard", value: "dashboard" },
     { icon: Calendar, label: "Calendar", value: "calendar" },
@@ -466,6 +485,12 @@ function AdminDashboard() {
       icon: Scissors,
       label: "Alterations",
       value: "alterations",
+    },
+    {
+      badge: pendingIntakeCount,
+      icon: Tag,
+      label: "Intake",
+      value: "intake",
     },
     { icon: ShoppingCart, label: "Carts", value: "abandoned-carts" },
     { icon: Users, label: "Customers", value: "customers" },
@@ -631,6 +656,8 @@ function AdminDashboard() {
             staffLoading={staffLoading}
             auditLog={auditLog}
             canViewAudit={isFullAdmin || myPermissions.includes("audit.view")}
+            intakes={intakes}
+            intakesLoading={intakesLoading}
           />
         </div>
       </div>
@@ -667,6 +694,8 @@ function AdminTabContent({
   staffLoading,
   auditLog,
   canViewAudit,
+  intakes,
+  intakesLoading,
 }: {
   activeTab: string;
   statsLoading: boolean;
@@ -696,6 +725,8 @@ function AdminTabContent({
   staffLoading: boolean;
   auditLog: any;
   canViewAudit: boolean;
+  intakes: any;
+  intakesLoading: boolean;
 }) {
   switch (activeTab) {
     case "dashboard": {
@@ -804,6 +835,15 @@ function AdminTabContent({
         />
       );
     }
+    case "intake": {
+      return intakesLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 text-gold animate-spin" />
+        </div>
+      ) : (
+        <IntakeManagement intakes={intakes ?? []} />
+      );
+    }
     default: {
       return null;
     }
@@ -816,7 +856,7 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
     businessName: contact?.businessName ?? "",
     email: contact?.email ?? "",
     hours: contact?.hours ?? "",
-    phone: contact?.phone ?? "",
+    phone: formatPhoneNumber(contact?.phone ?? ""),
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -826,8 +866,12 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
   };
 
   const handleSave = async () => {
-    if (!formData.address || !formData.phone || !formData.hours) {
-      toast.error("Address, phone and hours are required");
+    if (!formData.address || !formData.hours) {
+      toast.error("Address and hours are required");
+      return;
+    }
+    if (stripPhoneDigits(formData.phone).length !== 10) {
+      toast.error("Enter a 10-digit phone number");
       return;
     }
     setIsSaving(true);
@@ -889,17 +933,23 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           />
         </div>
         <div className="space-y-2">
-          <Label>Phone *</Label>
+          <Label>Phone <RequiredMark /></Label>
           <Input
             value={formData.phone}
+            inputMode="tel"
+            maxLength={14}
+            placeholder="(501) 404-8696"
             onChange={(e) =>
-              setFormData({ ...formData, phone: e.target.value })
+              setFormData({
+                ...formData,
+                phone: formatPhoneNumber(e.target.value),
+              })
             }
             className="border-gold/10 bg-card"
           />
         </div>
         <div className="space-y-2">
-          <Label>Address *</Label>
+          <Label>Address <RequiredMark /></Label>
           <Textarea
             value={formData.address}
             onChange={(e) =>
@@ -910,7 +960,7 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           />
         </div>
         <div className="space-y-2 sm:col-span-2">
-          <Label>Hours *</Label>
+          <Label>Hours <RequiredMark /></Label>
           <Textarea
             value={formData.hours}
             onChange={(e) =>
@@ -1811,7 +1861,7 @@ function ProductsAdmin({
           <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Title *</Label>
+                <Label>Title <RequiredMark /></Label>
                 <Input
                   value={formData.title}
                   onChange={(e) =>
@@ -1829,7 +1879,7 @@ function ProductsAdmin({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Slug *</Label>
+                <Label>Slug <RequiredMark /></Label>
                 <Input
                   value={formData.slug}
                   onChange={(e) =>
@@ -1855,7 +1905,7 @@ function ProductsAdmin({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Price *</Label>
+                <Label>Price <RequiredMark /></Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1882,7 +1932,7 @@ function ProductsAdmin({
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Category *</Label>
+                <Label>Category <RequiredMark /></Label>
                 <select
                   value={formData.categoryId}
                   onChange={(e) =>
@@ -2397,7 +2447,7 @@ function CategoriesAdmin({ categories }: { categories: any[] }) {
             className="space-y-4 mt-2"
           >
             <div className="space-y-2">
-              <Label htmlFor="cat-name">Category Name *</Label>
+              <Label htmlFor="cat-name">Category Name <RequiredMark /></Label>
               <Input
                 id="cat-name"
                 value={name}
@@ -2816,7 +2866,7 @@ function EventsAdmin({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Title *</Label>
+                <Label>Title <RequiredMark /></Label>
                 <Input
                   value={formData.title}
                   onChange={(e) =>
@@ -2832,7 +2882,7 @@ function EventsAdmin({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Slug *</Label>
+                <Label>Slug <RequiredMark /></Label>
                 <Input
                   value={formData.slug}
                   onChange={(e) =>
@@ -2857,7 +2907,7 @@ function EventsAdmin({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Start Date & Time *</Label>
+                <Label>Start Date & Time <RequiredMark /></Label>
                 <Input
                   type="datetime-local"
                   value={formData.startDate}
@@ -2882,7 +2932,7 @@ function EventsAdmin({
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Price ($) *</Label>
+                <Label>Price ($) <RequiredMark /></Label>
                 <Input
                   type="number"
                   value={formData.price}
@@ -3132,7 +3182,7 @@ function AlterationsAdmin({
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Select Customer *</Label>
+              <Label>Select Customer <RequiredMark /></Label>
               <select
                 value={manualData.userId}
                 onChange={(e) =>
@@ -3151,7 +3201,7 @@ function AlterationsAdmin({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Service Type *</Label>
+                <Label>Service Type <RequiredMark /></Label>
                 <Input
                   value={manualData.serviceType}
                   placeholder="e.g. Jeans Hemming, Suit Alterations"
@@ -3165,7 +3215,7 @@ function AlterationsAdmin({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Garment/Item Description *</Label>
+                <Label>Garment/Item Description <RequiredMark /></Label>
                 <Input
                   value={manualData.itemDescription}
                   placeholder="e.g. Levi's 501 Blue, Armani Charcoal Jacket"
@@ -3182,7 +3232,7 @@ function AlterationsAdmin({
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2 col-span-2">
-                <Label>Appointment Date *</Label>
+                <Label>Appointment Date <RequiredMark /></Label>
                 <Input
                   type="datetime-local"
                   value={manualData.preferredDate}
@@ -3824,7 +3874,7 @@ function PromotionsAdmin({
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Banner Title *</Label>
+              <Label>Banner Title <RequiredMark /></Label>
               <Input
                 value={formData.title}
                 placeholder="e.g. Summer Collection Arrivals!"
@@ -3926,7 +3976,7 @@ function SettingsAdmin({
   shippoSettings: Awaited<ReturnType<typeof adminGetShippoSettings>>;
 }) {
   const [address, setAddress] = useState(contact?.address || "");
-  const [phone, setPhone] = useState(contact?.phone || "");
+  const [phone, setPhone] = useState(formatPhoneNumber(contact?.phone || ""));
   const [hours, setHours] = useState(contact?.hours || "");
   const [businessName, setBusinessName] = useState(contact?.businessName || "");
   const [email, setEmail] = useState(contact?.email || "");
@@ -3973,8 +4023,12 @@ function SettingsAdmin({
   });
 
   const handleSaveSettings = () => {
-    if (!address || !phone || !hours) {
-      toast.error("All settings fields are required");
+    if (!address || !hours) {
+      toast.error("Address and hours are required");
+      return;
+    }
+    if (stripPhoneDigits(phone).length !== 10) {
+      toast.error("Enter a 10-digit phone number");
       return;
     }
     updateMutation.mutate({
@@ -4041,8 +4095,10 @@ function SettingsAdmin({
             <Label>Contact Phone Number</Label>
             <Input
               value={phone}
-              onChange={(e: any) => setPhone(e.target.value)}
-              placeholder="Phone number"
+              inputMode="tel"
+              maxLength={14}
+              onChange={(e: any) => setPhone(formatPhoneNumber(e.target.value))}
+              placeholder="(501) 404-8696"
               className="border-gold/10 font-mono"
             />
           </div>

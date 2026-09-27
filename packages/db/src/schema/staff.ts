@@ -129,6 +129,7 @@ export const intakeSubmissions = sqliteTable(
       .notNull(),
     id: text("id").primaryKey(),
     inboundLabelUrl: text("inbound_label_url"),
+    items: text("items").notNull().default("[]"),
     offerAmount: real("offer_amount"),
     offerStatus: text("offer_status", {
       enum: ["none", "pending", "accepted", "declined"],

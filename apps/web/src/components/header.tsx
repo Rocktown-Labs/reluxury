@@ -19,6 +19,7 @@ import UserMenu from "./user-menu";
 const NAV_LINKS = [
   { label: "Home", to: "/" },
   { label: "Shop", to: "/shop" },
+  { label: "Sell", to: "/sell" },
   { label: "Workshops", to: "/events" },
   { label: "Alterations", to: "/alterations" },
   { label: "About", to: "/about" },

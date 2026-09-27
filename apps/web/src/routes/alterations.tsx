@@ -2,13 +2,14 @@ import { Button } from "@reluxury/ui/components/button";
 import { Input } from "@reluxury/ui/components/input";
 import { Label } from "@reluxury/ui/components/label";
 import { Textarea } from "@reluxury/ui/components/textarea";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { CheckCircle, Clock, MapPin, Phone, Scissors } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 
 import { createAlterationBooking } from "@/functions/alterations";
+import RequiredMark from "@/components/required-mark";
 import { authClient } from "@/lib/auth-client";
 import { footerContactQueryOptions } from "@/lib/queries";
 
@@ -41,6 +42,7 @@ export const Route = createFileRoute("/alterations")({
 
 function AlterationsComponent() {
   const { data: session } = authClient.useSession();
+  const navigate = useNavigate({ from: "/alterations" });
   const { data: contact } = useQuery(footerContactQueryOptions());
   const address = contact?.address ?? "14217 Corvallis Rd, Ste F\nMaumelle, AR 72113";
   const phone = contact?.phone ?? "(501) 404-8696";
@@ -58,6 +60,7 @@ function AlterationsComponent() {
     e.preventDefault();
     if (!session) {
       toast.error("Please sign in to book an alteration");
+      await navigate({ search: { redirect: "/alterations" }, to: "/login" });
       return;
     }
     if (
@@ -189,7 +192,11 @@ function AlterationsComponent() {
             {!session && (
               <div className="p-4 rounded-lg border border-gold/10 bg-gold/5 text-sm text-muted-foreground">
                 Please{" "}
-                <Link to="/login" className="text-gold hover:underline">
+                <Link
+                  search={{ redirect: "/alterations" }}
+                  to="/login"
+                  className="text-gold hover:underline"
+                >
                   sign in
                 </Link>{" "}
                 to book an alteration.
@@ -198,14 +205,14 @@ function AlterationsComponent() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="serviceType">Service Type *</Label>
+                <Label htmlFor="serviceType">Service Type <RequiredMark /></Label>
                 <select
                   id="serviceType"
                   value={formData.serviceType}
                   onChange={(e) =>
                     setFormData({ ...formData, serviceType: e.target.value })
                   }
-                  className="flex h-10 w-full rounded-md border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
+                  className="flex h-10 w-full rounded-xl border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
                   required
                 >
                   <option value="">Select a service</option>
@@ -218,7 +225,7 @@ function AlterationsComponent() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="itemDescription">Item Description *</Label>
+                <Label htmlFor="itemDescription">Item Description <RequiredMark /></Label>
                 <Textarea
                   id="itemDescription"
                   value={formData.itemDescription}
@@ -236,7 +243,7 @@ function AlterationsComponent() {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="preferredDate">Preferred Date *</Label>
+                  <Label htmlFor="preferredDate">Preferred Date <RequiredMark /></Label>
                   <Input
                     id="preferredDate"
                     type="date"
@@ -262,7 +269,7 @@ function AlterationsComponent() {
                         preferredTime: e.target.value,
                       })
                     }
-                    className="flex h-10 w-full rounded-md border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
+                    className="flex h-10 w-full rounded-xl border border-gold/10 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/20"
                   >
                     <option value="">Select time</option>
                     {TIME_SLOTS.map((t) => (

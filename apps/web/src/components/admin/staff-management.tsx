@@ -36,6 +36,7 @@ import {
   adminRevokeInvite,
   adminSetUserBanned,
 } from "@/functions/staff";
+import RequiredMark from "@/components/required-mark";
 import { adminKeys } from "@/lib/queries";
 import { queryClient } from "@/lib/query-client";
 
@@ -464,7 +465,7 @@ export default function StaffManagement({
           <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Name *</Label>
+                <Label>Name <RequiredMark /></Label>
                 <Input
                   value={inviteName}
                   onChange={(e) => setInviteName(e.target.value)}
@@ -472,7 +473,7 @@ export default function StaffManagement({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Email *</Label>
+                <Label>Email <RequiredMark /></Label>
                 <Input
                   type="email"
                   value={inviteEmail}

@@ -1,4 +1,5 @@
 import { Badge } from "@reluxury/ui/components/badge";
+import { Button } from "@reluxury/ui/components/button";
 import {
   Tabs,
   TabsContent,
@@ -11,16 +12,21 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { Package, Scissors, Calendar, User, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Package, Scissors, Calendar, User, ArrowRight, Tag } from "lucide-react";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import { getMyAlterationBookings } from "@/functions/alterations";
 import { getMyEventRegistrations } from "@/functions/events";
+import { getMyIntakes, respondToOffer } from "@/functions/intake";
 import { getUser } from "@/functions/get-user";
 import { getOrders } from "@/functions/orders";
+import { myIntakesQueryOptions } from "@/lib/queries";
+import { queryClient } from "@/lib/query-client";
 
 const dashboardSearchSchema = z.object({
-  tab: z.enum(["orders", "bookings", "events", "profile"]).optional(),
+  tab: z.enum(["orders", "bookings", "events", "consignment", "profile"]).optional(),
 });
 
 export const Route = createFileRoute("/dashboard")({
@@ -33,20 +39,53 @@ export const Route = createFileRoute("/dashboard")({
     if (!context.session) {
       throw redirect({ to: "/login" });
     }
-    const [orders, bookings, registrations] = await Promise.all([
+    const [orders, bookings, registrations, intakes] = await Promise.all([
       getOrders(),
       getMyAlterationBookings(),
       getMyEventRegistrations(),
+      getMyIntakes(),
     ]);
-    return { bookings, orders, registrations, session: context.session };
+    return { bookings, intakes, orders, registrations, session: context.session };
   },
   validateSearch: (search) => dashboardSearchSchema.parse(search),
 });
 
+function parseIntakeItems(items: string | null): { description: string }[] {
+  if (!items) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(items);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function DashboardComponent() {
-  const { orders, bookings, registrations, session } = Route.useLoaderData();
+  const { orders, bookings, registrations, intakes, session } =
+    Route.useLoaderData();
   const { tab } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+
+  const { data: myIntakes } = useQuery({
+    ...myIntakesQueryOptions(),
+    initialData: intakes,
+  });
+
+  const handleOfferResponse = async (id: string, accept: boolean) => {
+    try {
+      await respondToOffer({ data: { accept, id } });
+      toast.success(
+        accept ? "Offer accepted — we'll be in touch" : "Offer declined"
+      );
+      await queryClient.invalidateQueries({
+        queryKey: myIntakesQueryOptions().queryKey,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Action failed");
+    }
+  };
 
   const statusColors: Record<string, string> = {
     approved: "bg-blue-500/10 text-blue-500",
@@ -77,7 +116,7 @@ function DashboardComponent() {
         onValueChange={(val) =>
           navigate({
             search: {
-              tab: val as "orders" | "bookings" | "events" | "profile",
+              tab: val as "orders" | "bookings" | "events" | "consignment" | "profile",
             },
           })
         }
@@ -95,6 +134,10 @@ function DashboardComponent() {
             <Calendar className="h-4 w-4" />
             Workshops ({registrations.length})
           </TabsTrigger>
+          <TabsTrigger value="consignment" className="gap-2">
+            <Tag className="h-4 w-4" />
+            Consignment ({intakes.length})
+          </TabsTrigger>
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
             Profile
@@ -106,7 +149,7 @@ function DashboardComponent() {
           aria-label="Account sections"
           className="fixed bottom-0 inset-x-0 z-40 border-t border-gold/10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:hidden"
         >
-          <div className="grid grid-cols-4 pb-[env(safe-area-inset-bottom)]">
+          <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
             {(
               [
                 {
@@ -126,6 +169,12 @@ function DashboardComponent() {
                   icon: Calendar,
                   label: "Workshops",
                   value: "events",
+                },
+                {
+                  count: intakes.length,
+                  icon: Tag,
+                  label: "Sell",
+                  value: "consignment",
                 },
                 { count: null, icon: User, label: "Profile", value: "profile" },
               ] as const
@@ -300,6 +349,91 @@ function DashboardComponent() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="consignment" className="space-y-4">
+          {(myIntakes ?? intakes).length === 0 ? (
+            <EmptyState
+              icon={Tag}
+              title="No consignment submissions"
+              description="Send photos ahead of time for drop-off or mail-in review."
+              action={{ label: "Sell to Us", to: "/sell" }}
+            />
+          ) : (
+            <div className="space-y-4">
+              {(myIntakes ?? intakes).map((submission) => {
+                const describedItems = parseIntakeItems(submission.items);
+                return (
+                  <div
+                    key={submission.id}
+                    className="p-5 rounded-xl border border-gold/10 bg-card space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-foreground">
+                        {describedItems.length} item
+                        {describedItems.length === 1 ? "" : "s"} ·{" "}
+                        {submission.type === "mailin"
+                          ? "Mail-in"
+                          : "Drop-off"}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={statusColors[submission.status] ?? ""}
+                      >
+                        {submission.status.replace("_", " ")}
+                      </Badge>
+                    </div>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      {describedItems.map((item, index) => (
+                        <li key={index}>
+                          {item.description}
+                        </li>
+                      ))}
+                    </ul>
+                    {submission.offerStatus === "pending" &&
+                      typeof submission.offerAmount === "number" && (
+                        <div className="rounded-lg border border-gold/20 bg-gold/5 p-4 space-y-3">
+                          <p className="text-sm text-foreground">
+                            Our offer:{" "}
+                            <span className="text-gold font-semibold">
+                              ${Number(submission.offerAmount).toFixed(2)}
+                            </span>
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-gold text-primary-foreground hover:bg-gold-dark"
+                              onClick={() =>
+                                handleOfferResponse(submission.id, true)
+                              }
+                            >
+                              Accept Offer
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-gold/20 text-gold hover:bg-gold/10"
+                              onClick={() =>
+                                handleOfferResponse(submission.id, false)
+                              }
+                            >
+                              Decline
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    {submission.offerStatus !== "none" && (
+                      <p className="text-xs text-muted-foreground">
+                        Offer {submission.offerStatus}
+                        {typeof submission.offerAmount === "number" &&
+                          ` · $${Number(submission.offerAmount).toFixed(2)}`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </TabsContent>

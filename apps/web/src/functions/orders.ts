@@ -19,13 +19,17 @@ import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 
 import { notifyAdmin } from "@/lib/admin-notify";
+import {
+  normalizePhoneToMasked,
+  optionalFlexiblePhoneSchema,
+} from "@/lib/phone";
 import { shippo } from "@/lib/shippo";
 import type { ShippoRate } from "@/lib/shippo";
 import { authMiddleware } from "@/middleware/auth";
 
 const orderInputSchema = z.object({
   deliveryMethod: z.enum(["pickup", "shipping"]),
-  email: z.string(),
+  email: z.email("Enter a valid email address"),
   guestItems: z
     .array(
       z.object({
@@ -35,8 +39,8 @@ const orderInputSchema = z.object({
       })
     )
     .optional(),
-  name: z.string(),
-  phone: z.string().optional(),
+  name: z.string().trim().min(1, "Full name is required"),
+  phone: optionalFlexiblePhoneSchema,
   selectedShippingRate: z
     .object({
       amount: z.string(),
@@ -48,13 +52,13 @@ const orderInputSchema = z.object({
     .optional(),
   shippingAddress: z
     .object({
-      address: z.string(),
-      city: z.string(),
-      email: z.string(),
-      name: z.string(),
-      phone: z.string().optional(),
-      state: z.string(),
-      zip: z.string(),
+      address: z.string().trim().min(1, "Street address is required"),
+      city: z.string().trim().min(1, "City is required"),
+      email: z.email("Enter a valid email address"),
+      name: z.string().trim().min(1, "Full name is required"),
+      phone: optionalFlexiblePhoneSchema,
+      state: z.string().trim().min(1, "State is required"),
+      zip: z.string().trim().min(3, "Enter a valid ZIP code"),
     })
     .optional(),
 });
@@ -219,9 +223,12 @@ export const createOrder = createServerFn({ method: "POST" })
         ? `Selected shipping: ${data.selectedShippingRate.provider} ${data.selectedShippingRate.servicelevelName} (${data.selectedShippingRate.objectId})`
         : null,
       orderNumber,
-      phone: data.phone ?? null,
+      phone: normalizePhoneToMasked(data.phone) ?? null,
       shippingAddress: data.shippingAddress
-        ? JSON.stringify(data.shippingAddress)
+        ? JSON.stringify({
+            ...data.shippingAddress,
+            phone: normalizePhoneToMasked(data.shippingAddress.phone),
+          })
         : null,
       shippingCost,
       shippoShipmentId: data.selectedShippingRate?.shipmentObjectId ?? null,
