@@ -217,6 +217,7 @@ export default function StaffManagement({
       setIsSuspending(false);
     }
   };
+  const handleResend = async (id: string) => {
     try {
       await adminResendInvite({ data: id });
       toast.success("Invitation resent");
