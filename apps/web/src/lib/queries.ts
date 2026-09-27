@@ -16,6 +16,7 @@ import {
   adminGetBusinessSetupState,
 } from "@/functions/admin";
 import { getCart } from "@/functions/cart";
+import { adminGetIntakes, getMyIntakes } from "@/functions/intake";
 import {
   adminGetAuditLog,
   adminGetMyStaffContext,
@@ -43,6 +44,7 @@ export const storeKeys = {
   events: () => [...storeKeys.all, "events"] as const,
   featured: () => [...storeKeys.all, "featured"] as const,
   footerContact: () => [...storeKeys.all, "footerContact"] as const,
+  myIntakes: () => [...storeKeys.all, "myIntakes"] as const,
   newArrivals: () => [...storeKeys.all, "newArrivals"] as const,
   product: (slug: string) => [...storeKeys.all, "product", slug] as const,
   products: (filters: Record<string, unknown>) =>
@@ -60,6 +62,7 @@ export const adminKeys = {
   customers: () => [...adminKeys.all, "customers"] as const,
   event: (id: string) => [...adminKeys.all, "event", id] as const,
   events: () => [...adminKeys.all, "events"] as const,
+  intakes: () => [...adminKeys.all, "intakes"] as const,
   order: (orderId: string) => [...adminKeys.all, "order", orderId] as const,
   orders: () => [...adminKeys.all, "orders"] as const,
   products: () => [...adminKeys.all, "products"] as const,
@@ -263,4 +266,16 @@ export const adminAuditLogQueryOptions = () =>
   queryOptions({
     queryFn: () => adminGetAuditLog(),
     queryKey: adminKeys.staffAudit(),
+  });
+
+export const adminIntakesQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetIntakes(),
+    queryKey: adminKeys.intakes(),
+  });
+
+export const myIntakesQueryOptions = () =>
+  queryOptions({
+    queryFn: () => getMyIntakes(),
+    queryKey: storeKeys.myIntakes(),
   });

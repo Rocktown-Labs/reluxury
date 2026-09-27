@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShopRouteImport } from './routes/shop'
+import { Route as SellRouteImport } from './routes/sell'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as EventsRouteImport } from './routes/events'
@@ -32,6 +33,11 @@ import { Route as AdminAlterationsAlterationIdRouteImport } from './routes/admin
 const ShopRoute = ShopRouteImport.update({
   id: '/shop',
   path: '/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SellRoute = SellRouteImport.update({
+  id: '/sell',
+  path: '/sell',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -139,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/events': typeof EventsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/sell': typeof SellRoute
   '/shop': typeof ShopRouteWithChildren
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
@@ -160,6 +167,7 @@ export interface FileRoutesByTo {
   '/events': typeof EventsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/sell': typeof SellRoute
   '/shop': typeof ShopRouteWithChildren
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
@@ -182,6 +190,7 @@ export interface FileRoutesById {
   '/events': typeof EventsRouteWithChildren
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/sell': typeof SellRoute
   '/shop': typeof ShopRouteWithChildren
   '/events/$slug': typeof EventsSlugRoute
   '/shop/$slug': typeof ShopSlugRoute
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/events'
     | '/login'
     | '/reset-password'
+    | '/sell'
     | '/shop'
     | '/events/$slug'
     | '/shop/$slug'
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/events'
     | '/login'
     | '/reset-password'
+    | '/sell'
     | '/shop'
     | '/events/$slug'
     | '/shop/$slug'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '/events'
     | '/login'
     | '/reset-password'
+    | '/sell'
     | '/shop'
     | '/events/$slug'
     | '/shop/$slug'
@@ -269,6 +281,7 @@ export interface RootRouteChildren {
   EventsRoute: typeof EventsRouteWithChildren
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SellRoute: typeof SellRoute
   ShopRoute: typeof ShopRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiWebhooksResendRoute: typeof ApiWebhooksResendRoute
@@ -281,6 +294,13 @@ declare module '@tanstack/react-router' {
       path: '/shop'
       fullPath: '/shop'
       preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sell': {
+      id: '/sell'
+      path: '/sell'
+      fullPath: '/sell'
+      preLoaderRoute: typeof SellRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -459,6 +479,7 @@ const rootRouteChildren: RootRouteChildren = {
   EventsRoute: EventsRouteWithChildren,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SellRoute: SellRoute,
   ShopRoute: ShopRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiWebhooksResendRoute: ApiWebhooksResendRoute,

@@ -56,6 +56,7 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
+import IntakeManagement from "@/components/admin/intake-management";
 import StaffManagement from "@/components/admin/staff-management";
 import CalendarAdmin from "@/components/calendar-admin";
 import {
@@ -93,6 +94,7 @@ import {
   adminSetBusinessSetupDone,
 } from "@/functions/admin";
 import { getUser } from "@/functions/get-user";
+import { adminGetIntakes } from "@/functions/intake";
 import {
   adminGetAuditLog,
   adminGetStaffList,
@@ -112,6 +114,7 @@ import {
   adminStaffListQueryOptions,
   adminStaffMeQueryOptions,
   adminAuditLogQueryOptions,
+  adminIntakesQueryOptions,
   footerContactQueryOptions,
   categoriesQueryOptions,
 } from "@/lib/queries";
@@ -145,6 +148,7 @@ export const TAB_PERMISSIONS: Record<string, string | null> = {
   customers: "customers.view",
   dashboard: null,
   events: "workshops.manage",
+  intake: "intake.manage",
   orders: "orders.manage",
   products: "products.manage",
   promotions: "marketing.manage",
@@ -202,6 +206,7 @@ export const Route = createFileRoute("/admin")({
       shippoSettings,
       staffList,
       auditLog,
+      intakes,
     ] = await Promise.all([
       maybe("dashboard", () => adminGetStats()),
       maybe("products", () => adminGetProducts()),
@@ -218,6 +223,7 @@ export const Route = createFileRoute("/admin")({
       allow("staff") || allow("dashboard")
         ? adminGetAuditLog().catch(() => null)
         : Promise.resolve(null),
+      maybe("intake", () => adminGetIntakes()),
     ]);
     const staffRole = (session?.staff as { role?: string } | undefined)?.role;
     const viewerIsFullAdmin =
@@ -232,6 +238,7 @@ export const Route = createFileRoute("/admin")({
       contact,
       customers,
       events,
+      intakes,
       orders,
       products,
       promotions,
@@ -421,6 +428,13 @@ function AdminDashboard() {
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
+  const { data: intakes, isLoading: intakesLoading } = useQuery({
+    ...adminIntakesQueryOptions(),
+    enabled: canSeeTab("intake"),
+    initialData: loaderData.intakes,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
+  });
+
   const canViewAudit = isFullAdmin || myPermissions.includes("audit.view");
   const { data: auditLog } = useQuery({
     ...adminAuditLogQueryOptions(),
@@ -444,6 +458,9 @@ function AdminDashboard() {
       return !Number.isNaN(start) && start >= Date.now();
     }).length ?? 0;
 
+  const pendingIntakeCount =
+    intakes?.filter((intake: any) => intake.status === "pending").length ?? 0;
+
   const tabs = [
     { icon: LayoutDashboard, label: "Dashboard", value: "dashboard" },
     { icon: Calendar, label: "Calendar", value: "calendar" },
@@ -466,6 +483,12 @@ function AdminDashboard() {
       icon: Scissors,
       label: "Alterations",
       value: "alterations",
+    },
+    {
+      badge: pendingIntakeCount,
+      icon: Tag,
+      label: "Intake",
+      value: "intake",
     },
     { icon: ShoppingCart, label: "Carts", value: "abandoned-carts" },
     { icon: Users, label: "Customers", value: "customers" },
@@ -631,6 +654,8 @@ function AdminDashboard() {
             staffLoading={staffLoading}
             auditLog={auditLog}
             canViewAudit={isFullAdmin || myPermissions.includes("audit.view")}
+            intakes={intakes}
+            intakesLoading={intakesLoading}
           />
         </div>
       </div>
@@ -667,6 +692,8 @@ function AdminTabContent({
   staffLoading,
   auditLog,
   canViewAudit,
+  intakes,
+  intakesLoading,
 }: {
   activeTab: string;
   statsLoading: boolean;
@@ -696,6 +723,8 @@ function AdminTabContent({
   staffLoading: boolean;
   auditLog: any;
   canViewAudit: boolean;
+  intakes: any;
+  intakesLoading: boolean;
 }) {
   switch (activeTab) {
     case "dashboard": {
@@ -802,6 +831,15 @@ function AdminTabContent({
           auditLog={auditLog ?? undefined}
           canViewAudit={canViewAudit}
         />
+      );
+    }
+    case "intake": {
+      return intakesLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 text-gold animate-spin" />
+        </div>
+      ) : (
+        <IntakeManagement intakes={intakes ?? []} />
       );
     }
     default: {
