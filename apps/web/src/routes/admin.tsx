@@ -100,7 +100,7 @@ import {
   adminGetStaffList,
 } from "@/functions/staff";
 import { getFooterContact, getCategories } from "@/functions/store";
-import { formatPhoneNumber } from "@/lib/phone";
+import { formatPhoneDigits, stripPhoneDigits } from "@/lib/phone";
 import {
   adminStatsQueryOptions,
   adminProductsQueryOptions,
@@ -855,7 +855,7 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
     businessName: contact?.businessName ?? "",
     email: contact?.email ?? "",
     hours: contact?.hours ?? "",
-    phone: contact?.phone ?? "",
+    phone: stripPhoneDigits(contact?.phone ?? ""),
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -865,8 +865,12 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
   };
 
   const handleSave = async () => {
-    if (!formData.address || !formData.phone || !formData.hours) {
-      toast.error("Address, phone and hours are required");
+    if (!formData.address || !formData.hours) {
+      toast.error("Address and hours are required");
+      return;
+    }
+    if (stripPhoneDigits(formData.phone).length !== 10) {
+      toast.error("Enter a 10-digit phone number");
       return;
     }
     setIsSaving(true);
@@ -877,7 +881,7 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           businessName: formData.businessName || undefined,
           email: formData.email || undefined,
           hours: formData.hours,
-          phone: formData.phone,
+          phone: formatPhoneDigits(formData.phone),
         },
       });
       await adminSetBusinessSetupDone();
@@ -931,13 +935,13 @@ function BusinessSetupPrompt({ contact }: { contact: any }) {
           <Label>Phone *</Label>
           <Input
             value={formData.phone}
-            inputMode="tel"
-            maxLength={14}
-            placeholder="(501) 555-0123"
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="(501) 404-8696"
             onChange={(e) =>
               setFormData({
                 ...formData,
-                phone: formatPhoneNumber(e.target.value),
+                phone: stripPhoneDigits(e.target.value),
               })
             }
             className="border-gold/10 bg-card"
@@ -3971,7 +3975,7 @@ function SettingsAdmin({
   shippoSettings: Awaited<ReturnType<typeof adminGetShippoSettings>>;
 }) {
   const [address, setAddress] = useState(contact?.address || "");
-  const [phone, setPhone] = useState(contact?.phone || "");
+  const [phone, setPhone] = useState(stripPhoneDigits(contact?.phone || ""));
   const [hours, setHours] = useState(contact?.hours || "");
   const [businessName, setBusinessName] = useState(contact?.businessName || "");
   const [email, setEmail] = useState(contact?.email || "");
@@ -4018,8 +4022,12 @@ function SettingsAdmin({
   });
 
   const handleSaveSettings = () => {
-    if (!address || !phone || !hours) {
-      toast.error("All settings fields are required");
+    if (!address || !hours) {
+      toast.error("Address and hours are required");
+      return;
+    }
+    if (stripPhoneDigits(phone).length !== 10) {
+      toast.error("Enter a 10-digit phone number");
       return;
     }
     updateMutation.mutate({
@@ -4027,7 +4035,7 @@ function SettingsAdmin({
       businessName: businessName || undefined,
       email: email || undefined,
       hours,
-      phone,
+      phone: formatPhoneDigits(phone),
     });
   };
 
@@ -4086,10 +4094,10 @@ function SettingsAdmin({
             <Label>Contact Phone Number</Label>
             <Input
               value={phone}
-              inputMode="tel"
-              maxLength={14}
-              onChange={(e: any) => setPhone(formatPhoneNumber(e.target.value))}
-              placeholder="(501) 555-0123"
+              inputMode="numeric"
+              maxLength={10}
+              onChange={(e: any) => setPhone(stripPhoneDigits(e.target.value))}
+              placeholder="(501) 404-8696"
               className="border-gold/10 font-mono"
             />
           </div>

@@ -14,6 +14,10 @@ import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 
 import { notifyAdmin } from "@/lib/admin-notify";
+import {
+  normalizePhoneToMasked,
+  optionalFlexiblePhoneSchema,
+} from "@/lib/phone";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { authMiddleware } from "@/middleware/auth";
 
@@ -89,16 +93,7 @@ export const submitIntake = createServerFn({ method: "POST" })
       contactEmail: z.email("Enter a valid email address"),
       contactName: z.string().trim().min(1, "Full name is required"),
       items: z.array(intakeItemSchema).min(1).max(20),
-      phone: z
-        .string()
-        .optional()
-        .refine(
-          (value) =>
-            value === undefined ||
-            value === "" ||
-            /^\(\d{3}\) \d{3}-\d{4}$/.test(value),
-          "Enter a 10-digit phone number"
-        ),
+      phone: optionalFlexiblePhoneSchema,
       shipFromAddress: z
         .object({
           address: z.string().trim().min(1, "Street address is required"),
@@ -152,7 +147,7 @@ export const submitIntake = createServerFn({ method: "POST" })
         )
       ),
       offerStatus: "none",
-      phone: data.phone ?? null,
+      phone: normalizePhoneToMasked(data.phone) ?? null,
       shipFromAddress: data.shipFromAddress
         ? JSON.stringify(data.shipFromAddress)
         : null,

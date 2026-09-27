@@ -2,47 +2,72 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatPhoneDigits,
   formatPhoneNumber,
-  optionalPhoneSchema,
+  normalizePhoneToMasked,
+  optionalFlexiblePhoneSchema,
+  optionalPhoneDigitsSchema,
   phoneSchema,
+  stripPhoneDigits,
 } from "@/lib/phone";
 
-describe("formatPhoneNumber", () => {
-  it("returns empty for empty input", () => {
-    expect(formatPhoneNumber("")).toBe("");
+describe("stripPhoneDigits", () => {
+  it("keeps only digits, capped at 10", () => {
+    expect(stripPhoneDigits("(501) 404-8696")).toBe("5014048696");
+    expect(stripPhoneDigits("call 5014048696 now")).toBe("5014048696");
+    expect(stripPhoneDigits("50140486969999")).toBe("5014048696");
+    expect(stripPhoneDigits("")).toBe("");
+  });
+});
+
+describe("formatPhoneDigits", () => {
+  it("formats 10 typed digits as (123) 456-7890", () => {
+    expect(formatPhoneDigits("5014048696")).toBe("(501) 404-8696");
   });
 
+  it("returns partial input untouched", () => {
+    expect(formatPhoneDigits("50140")).toBe("50140");
+  });
+});
+
+describe("formatPhoneNumber", () => {
   it("masks progressive input as (501) ###-####", () => {
     expect(formatPhoneNumber("5")).toBe("(5");
-    expect(formatPhoneNumber("501")).toBe("(501");
-    expect(formatPhoneNumber("5014")).toBe("(501) 4");
-    expect(formatPhoneNumber("501404")).toBe("(501) 404");
     expect(formatPhoneNumber("5014048696")).toBe("(501) 404-8696");
   });
+});
 
-  it("strips letters so they can never be typed in", () => {
-    expect(formatPhoneNumber("(501) abc-8696")).toBe("(501) 869-6");
-    expect(formatPhoneNumber("call 5014048696 now")).toBe("(501) 404-8696");
-  });
-
-  it("caps at 10 digits", () => {
-    expect(formatPhoneNumber("50140486969999")).toBe("(501) 404-8696");
+describe("normalizePhoneToMasked", () => {
+  it("converts typed digits to the display format", () => {
+    expect(normalizePhoneToMasked("5014048696")).toBe("(501) 404-8696");
+    expect(normalizePhoneToMasked("(501) 404-8696")).toBe("(501) 404-8696");
+    expect(normalizePhoneToMasked(undefined)).toBe(undefined);
   });
 });
 
 describe("phone schemas", () => {
-  it("accepts only the masked shape", () => {
+  it("accepts only the masked shape for stored values", () => {
     expect(phoneSchema.safeParse("(501) 404-8696").success).toBe(true);
     expect(phoneSchema.safeParse("5014048696").success).toBe(false);
-    expect(phoneSchema.safeParse("(501) 404-869").success).toBe(false);
   });
 
-  it("allows empty/undefined for optional phones", () => {
-    expect(optionalPhoneSchema.safeParse(undefined).success).toBe(true);
-    expect(optionalPhoneSchema.safeParse("").success).toBe(true);
-    expect(optionalPhoneSchema.safeParse("(501) 404-8696").success).toBe(
+  it("accepts typed digits for form input", () => {
+    expect(optionalPhoneDigitsSchema.safeParse(undefined).success).toBe(true);
+    expect(optionalPhoneDigitsSchema.safeParse("").success).toBe(true);
+    expect(optionalPhoneDigitsSchema.safeParse("5014048696").success).toBe(
       true
     );
-    expect(optionalPhoneSchema.safeParse("abc").success).toBe(false);
+    expect(optionalPhoneDigitsSchema.safeParse("50140").success).toBe(false);
+    expect(optionalPhoneDigitsSchema.safeParse("abc").success).toBe(false);
+  });
+
+  it("accepts digits or masked on the server", () => {
+    expect(optionalFlexiblePhoneSchema.safeParse("5014048696").success).toBe(
+      true
+    );
+    expect(optionalFlexiblePhoneSchema.safeParse("(501) 404-8696").success).toBe(
+      true
+    );
+    expect(optionalFlexiblePhoneSchema.safeParse("abc").success).toBe(false);
   });
 });

@@ -14,7 +14,7 @@ import {
 } from "@/functions/intake";
 import { validateConsignmentAddress } from "@/functions/address";
 import { authClient } from "@/lib/auth-client";
-import { formatPhoneNumber, optionalPhoneSchema } from "@/lib/phone";
+import { formatPhoneDigits, optionalPhoneDigitsSchema, stripPhoneDigits } from "@/lib/phone";
 import { categoriesQueryOptions } from "@/lib/queries";
 import AddressAutocomplete from "@/components/address-autocomplete";
 import SignInForm from "@/components/sign-in-form";
@@ -45,7 +45,7 @@ const CONDITIONS = ["new", "like_new", "excellent", "good", "fair"];
 const sellContactSchema = z.object({
   contactEmail: z.email("Enter a valid email address"),
   contactName: z.string().trim().min(1, "Full name is required"),
-  phone: optionalPhoneSchema,
+  phone: optionalPhoneDigitsSchema,
 });
 
 async function checkMailInAddress(input: {
@@ -159,10 +159,6 @@ function SellComponent() {
       toast.error(contact.error.issues[0]?.message ?? "Check your contact info");
       return;
     }
-    if (phone && !/^\(\d{3}\) \d{3}-\d{4}$/.test(phone)) {
-      toast.error("Enter a 10-digit phone number");
-      return;
-    }
     if (items.some((item) => !item.description.trim())) {
       toast.error("Describe every item");
       return;
@@ -200,7 +196,7 @@ function SellComponent() {
             description: item.description.trim(),
             photos: item.photos,
           })),
-          phone: phone.trim() || undefined,
+          phone: phone ? formatPhoneDigits(phone) : undefined,
           shipFromAddress:
             intakeType === "mailin"
               ? {
@@ -397,22 +393,12 @@ function SellComponent() {
               <Label htmlFor="intake-phone">Phone</Label>
               <Input
                 id="intake-phone"
-                inputMode="tel"
+                inputMode="numeric"
                 autoComplete="tel"
-                maxLength={14}
-                placeholder="(501) 555-0123"
+                maxLength={10}
+                placeholder="(501) 404-8696"
                 value={phone}
-                onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
-                onKeyDown={(e) => {
-                  if (
-                    /[a-zA-Z]/.test(e.key) &&
-                    !e.metaKey &&
-                    !e.ctrlKey &&
-                    e.key.length === 1
-                  ) {
-                    e.preventDefault();
-                  }
-                }}
+                onChange={(e) => setPhone(stripPhoneDigits(e.target.value))}
                 className="border-gold/10"
               />
             </div>

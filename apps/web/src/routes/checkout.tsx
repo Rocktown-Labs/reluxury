@@ -19,7 +19,7 @@ import { createOrder, getCheckoutShippingRates } from "@/functions/orders";
 import { getProductsByIds } from "@/functions/store";
 import { authClient } from "@/lib/auth-client";
 import { getGuestCart, clearGuestCart } from "@/lib/guest-cart";
-import { formatPhoneNumber, optionalPhoneSchema } from "@/lib/phone";
+import { formatPhoneDigits, optionalPhoneDigitsSchema, stripPhoneDigits } from "@/lib/phone";
 import { queryClient } from "@/lib/query-client";
 import AddressAutocomplete from "@/components/address-autocomplete";
 import { validateConsignmentAddress } from "@/functions/address";
@@ -146,7 +146,7 @@ function CheckoutComponent() {
     city: formData.city,
     email: formData.email,
     name: formData.name,
-    phone: formData.phone || undefined,
+    phone: formData.phone ? formatPhoneDigits(formData.phone) : undefined,
     state: formData.state,
     zip: formData.zip,
   });
@@ -217,7 +217,7 @@ function CheckoutComponent() {
       .object({
         email: z.email("Invalid email address"),
         name: z.string().min(1, "Full name is required"),
-        phone: optionalPhoneSchema,
+        phone: optionalPhoneDigitsSchema,
       })
       .safeParse({
         email: formData.email,
@@ -305,7 +305,7 @@ function CheckoutComponent() {
         deliveryMethod,
         email: formData.email,
         name: formData.name,
-        phone: formData.phone || undefined,
+        phone: formData.phone ? formatPhoneDigits(formData.phone) : undefined,
         selectedShippingRate: selectedShippingRate
           ? {
               amount: selectedShippingRate.amount,
@@ -450,26 +450,16 @@ function CheckoutComponent() {
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
-                  inputMode="tel"
+                  inputMode="numeric"
                   autoComplete="tel"
-                  maxLength={14}
+                  maxLength={10}
                   value={formData.phone}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      phone: formatPhoneNumber(e.target.value),
+                      phone: stripPhoneDigits(e.target.value),
                     })
                   }
-                  onKeyDown={(e) => {
-                    if (
-                      /[a-zA-Z]/.test(e.key) &&
-                      !e.metaKey &&
-                      !e.ctrlKey &&
-                      e.key.length === 1
-                    ) {
-                      e.preventDefault();
-                    }
-                  }}
                   className="bg-background border-gold/10"
                   placeholder="(501) 404-8696"
                 />
