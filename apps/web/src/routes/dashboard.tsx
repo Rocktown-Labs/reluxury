@@ -22,7 +22,7 @@ import { getMyEventRegistrations } from "@/functions/events";
 import { getMyIntakes, respondToOffer } from "@/functions/intake";
 import { getUser } from "@/functions/get-user";
 import { getOrders } from "@/functions/orders";
-import { myIntakesQueryOptions } from "@/lib/queries";
+import { myIntakesQueryOptions, myShiftsQueryOptions } from "@/lib/queries";
 import { queryClient } from "@/lib/query-client";
 
 const dashboardSearchSchema = z.object({
@@ -72,6 +72,8 @@ function DashboardComponent() {
     ...myIntakesQueryOptions(),
     initialData: intakes,
   });
+  const staffContext =
+    (session as { staff?: { id: string } | null } | null)?.staff ?? null;
 
   const handleOfferResponse = async (id: string, accept: boolean) => {
     try {
@@ -431,6 +433,23 @@ function DashboardComponent() {
                           ` · $${Number(submission.offerAmount).toFixed(2)}`}
                       </p>
                     )}
+                    {typeof submission.inboundLabelUrl === "string" &&
+                      submission.inboundLabelUrl.length > 0 && (
+                        <p className="text-xs">
+                          <a
+                            href={submission.inboundLabelUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gold hover:underline"
+                          >
+                            Download your prepaid shipping label
+                          </a>
+                          {typeof submission.inboundTrackingNumber ===
+                            "string" &&
+                            submission.inboundTrackingNumber.length > 0 &&
+                            ` · Tracking: ${submission.inboundTrackingNumber}`}
+                        </p>
+                      )}
                   </div>
                 );
               })}
@@ -468,8 +487,63 @@ function DashboardComponent() {
               </button>
             </Link>
           )}
+          {staffContext && <MyScheduleCard staff={staffContext} />}
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+interface MyShiftItem {
+  endAt: string;
+  id: string;
+  startAt: string;
+}
+
+function MyScheduleCard({ staff }: { staff: { id: string } }) {
+  const { data: myShifts } = useQuery({
+    ...myShiftsQueryOptions(),
+    enabled: Boolean(staff?.id),
+  });
+  if (!staff?.id) {
+    return null;
+  }
+  return (
+    <div className="p-6 rounded-xl border border-gold/10 bg-card max-w-lg space-y-4">
+      <h2 className="font-display text-xl text-foreground">My Schedule</h2>
+      {(myShifts ?? []).length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No upcoming shifts scheduled.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {(myShifts ?? []).slice(0, 5).map((shift: MyShiftItem) => (
+            <li
+              key={shift.id}
+              className="flex items-center justify-between gap-3 text-sm rounded-lg border border-gold/10 px-3 py-2"
+            >
+              <span className="text-foreground">
+                {new Date(shift.startAt).toLocaleDateString([], {
+                  day: "numeric",
+                  month: "short",
+                  weekday: "short",
+                })}
+              </span>
+              <span className="text-muted-foreground font-mono text-xs">
+                {new Date(shift.startAt).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}{" "}
+                –{" "}
+                {new Date(shift.endAt).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

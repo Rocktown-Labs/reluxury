@@ -134,6 +134,7 @@ export function intakeSubmittedHtml(props: {
 
 export function intakeDecisionHtml(props: {
   adminNote?: string;
+  appointmentLabel?: string;
   business?: EmailBusinessInfo;
   customerName: string;
   decision: "approved" | "declined";
@@ -148,9 +149,12 @@ export function intakeDecisionHtml(props: {
   const note = props.adminNote
     ? `<p style="color:#6b6259"><em>${props.adminNote}</em></p>`
     : "";
+  const appointment = props.appointmentLabel
+    ? `<p>Your drop-off appointment: <strong>${props.appointmentLabel}</strong>.</p>`
+    : "";
   const headline =
     props.decision === "approved" ? "Good news!" : "Update on your submission";
-  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>${headline}</h1><p>Hi ${props.customerName}, ${props.decision === "approved" ? "we'd love to take your items" : "we're passing on your items this time"}.</p>${offer}${note}${businessFooter(props.business)}</div></div>`;
+  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>${headline}</h1><p>Hi ${props.customerName}, ${props.decision === "approved" ? "we'd love to take your items" : "we're passing on your items this time"}.</p>${offer}${appointment}${note}${businessFooter(props.business)}</div></div>`;
 }
 
 export function intakeOfferResponseHtml(props: {
@@ -172,4 +176,28 @@ export function intakeReceivedHtml(props: {
   customerName: string;
 }) {
   return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Items received</h1><p>Hi ${props.customerName}, your consignment items arrived safely and are being prepared. We'll notify you once they're listed.</p>${businessFooter(props.business)}</div></div>`;
+}
+
+export function intakeLabelReadyHtml(props: {
+  business?: EmailBusinessInfo;
+  carrier?: string | null;
+  customerName: string;
+  labelUrl: string;
+  trackingNumber?: string | null;
+}) {
+  const tracking =
+    props.trackingNumber || props.carrier
+      ? `<p>Carrier: ${props.carrier ?? "USPS"}${props.trackingNumber ? ` · Tracking: ${props.trackingNumber}` : ""}</p>`
+      : "";
+  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Your shipping label is ready</h1><p>Hi ${props.customerName}, print the prepaid label below and drop your consignment box at any carrier location.</p>${tracking}<p><a href="${props.labelUrl}">Download shipping label (PDF)</a></p>${businessFooter(props.business)}</div></div>`;
+}
+
+export function shiftReminderHtml(props: {
+  business?: EmailBusinessInfo;
+  endAt: string;
+  position?: string | null;
+  staffName: string;
+  startAt: string;
+}) {
+  return `<div style="font-family:sans-serif;max-width:560px;margin:0 auto"><div style="background:#0a0a0a;color:#d4af77;padding:24px;text-align:center;font-weight:700;letter-spacing:4px">ReLUXURY</div><div style="padding:24px"><h1>Shift today</h1><p>Hi ${props.staffName}, you're on the schedule today from ${props.startAt} to ${props.endAt}${props.position ? ` (${props.position})` : ""}.</p>${businessFooter(props.business)}</div></div>`;
 }

@@ -34,6 +34,7 @@ import {
   Package,
   ShoppingCart,
   Calendar,
+  Clock,
   Scissors,
   Megaphone,
   Plus,
@@ -57,6 +58,7 @@ import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
 import IntakeManagement from "@/components/admin/intake-management";
+import ShiftsManagement from "@/components/admin/shifts-management";
 import StaffManagement from "@/components/admin/staff-management";
 import RequiredMark from "@/components/required-mark";
 import CalendarAdmin from "@/components/calendar-admin";
@@ -73,6 +75,12 @@ import {
   adminDeleteProduct,
   adminBulkDeleteProducts,
   adminUpdateOrderStatus,
+  adminClaimOrder,
+  adminUnclaimOrder,
+  adminClaimAlteration,
+  adminUnclaimAlteration,
+  adminGetLowStockThreshold,
+  adminUpdateLowStockThreshold,
   adminCreateEvent,
   adminDeleteEvent,
   adminBulkDeleteEvents,
@@ -98,6 +106,7 @@ import { getUser } from "@/functions/get-user";
 import { adminGetIntakes } from "@/functions/intake";
 import {
   adminGetAuditLog,
+  adminGetShifts,
   adminGetStaffList,
 } from "@/functions/staff";
 import { getFooterContact, getCategories } from "@/functions/store";
@@ -117,6 +126,7 @@ import {
   adminStaffMeQueryOptions,
   adminAuditLogQueryOptions,
   adminIntakesQueryOptions,
+  adminShiftsQueryOptions,
   footerContactQueryOptions,
   categoriesQueryOptions,
 } from "@/lib/queries";
@@ -154,6 +164,7 @@ export const TAB_PERMISSIONS: Record<string, string | null> = {
   orders: "orders.manage",
   products: "products.manage",
   promotions: "marketing.manage",
+  schedule: "schedule.manage",
   settings: "settings.manage",
   staff: "staff.manage",
 };
@@ -209,6 +220,7 @@ export const Route = createFileRoute("/admin")({
       staffList,
       auditLog,
       intakes,
+      shifts,
     ] = await Promise.all([
       maybe("dashboard", () => adminGetStats()),
       maybe("products", () => adminGetProducts()),
@@ -226,6 +238,7 @@ export const Route = createFileRoute("/admin")({
         ? adminGetAuditLog().catch(() => null)
         : Promise.resolve(null),
       maybe("intake", () => adminGetIntakes()),
+      maybe("schedule", () => adminGetShifts()),
     ]);
     const staffRole = (session?.staff as { role?: string } | undefined)?.role;
     const viewerIsFullAdmin =
@@ -244,6 +257,7 @@ export const Route = createFileRoute("/admin")({
       orders,
       products,
       promotions,
+      shifts,
       shippoSettings,
       staffList,
       stats,
@@ -437,6 +451,13 @@ function AdminDashboard() {
     ...LIVE_ADMIN_QUERY_OPTIONS,
   });
 
+  const { data: shifts, isLoading: shiftsLoading } = useQuery({
+    ...adminShiftsQueryOptions(),
+    enabled: canSeeTab("schedule"),
+    initialData: loaderData.shifts,
+    ...LIVE_ADMIN_QUERY_OPTIONS,
+  });
+
   const canViewAudit = isFullAdmin || myPermissions.includes("audit.view");
   const { data: auditLog } = useQuery({
     ...adminAuditLogQueryOptions(),
@@ -463,10 +484,22 @@ function AdminDashboard() {
   const pendingIntakeCount =
     intakes?.filter((intake: any) => intake.status === "pending").length ?? 0;
 
+  const lowStockThreshold = stats?.lowStockThreshold ?? 5;
+  const lowStockCount =
+    products?.filter(
+      (product: any) => (product.quantity ?? 0) <= lowStockThreshold
+    ).length ?? 0;
+
   const tabs = [
     { icon: LayoutDashboard, label: "Dashboard", value: "dashboard" },
     { icon: Calendar, label: "Calendar", value: "calendar" },
-    { icon: Package, label: "Products", value: "products" },
+    { icon: Clock, label: "Shifts", value: "schedule" },
+    {
+      badge: lowStockCount,
+      icon: Package,
+      label: "Products",
+      value: "products",
+    },
     { icon: Tag, label: "Categories", value: "categories" },
     {
       badge: stats?.pendingOrders ?? 0,
@@ -658,6 +691,9 @@ function AdminDashboard() {
             canViewAudit={isFullAdmin || myPermissions.includes("audit.view")}
             intakes={intakes}
             intakesLoading={intakesLoading}
+            lowStockThreshold={lowStockThreshold}
+            shifts={shifts}
+            shiftsLoading={shiftsLoading}
           />
         </div>
       </div>
@@ -696,6 +732,9 @@ function AdminTabContent({
   canViewAudit,
   intakes,
   intakesLoading,
+  lowStockThreshold,
+  shifts,
+  shiftsLoading,
 }: {
   activeTab: string;
   statsLoading: boolean;
@@ -727,6 +766,9 @@ function AdminTabContent({
   canViewAudit: boolean;
   intakes: any;
   intakesLoading: boolean;
+  lowStockThreshold: number;
+  shifts: any;
+  shiftsLoading: boolean;
 }) {
   switch (activeTab) {
     case "dashboard": {
@@ -741,6 +783,8 @@ function AdminTabContent({
           orders={orders}
           events={events}
           alterations={alterations}
+          products={products}
+          lowStockThreshold={lowStockThreshold}
           onNavigateTab={onNavigateTab}
         />
       );
@@ -752,6 +796,18 @@ function AdminTabContent({
         </div>
       ) : (
         <CalendarAdmin alterations={alterations} events={events} />
+      );
+    }
+    case "schedule": {
+      return shiftsLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 text-gold animate-spin" />
+        </div>
+      ) : (
+        <ShiftsManagement
+          shifts={shifts?.shifts ?? []}
+          assignable={shifts?.assignable ?? []}
+        />
       );
     }
     case "products": {
@@ -996,12 +1052,16 @@ function DashboardStats({
   orders,
   events,
   alterations,
+  products,
+  lowStockThreshold,
   onNavigateTab,
 }: {
   stats: Awaited<ReturnType<typeof adminGetStats>>;
   orders: any[];
   events: any[];
   alterations: any[];
+  products: any;
+  lowStockThreshold: number;
   onNavigateTab: (tab: string) => void;
 }) {
   const now = Date.now();
@@ -1038,6 +1098,13 @@ function DashboardStats({
   const upcomingAlterations = (alterations ?? [])
     .filter((booking: any) => ["pending", "approved"].includes(booking.status))
     .slice(0, 5);
+  const lowStockProducts = (products ?? [])
+    .filter((product: any) => (product.quantity ?? 0) <= lowStockThreshold)
+    .toSorted(
+      (a: any, b: any) => (a.quantity ?? 0) - (b.quantity ?? 0)
+    );
+  const lowStockCount = lowStockProducts.length;
+  const topLowStock = lowStockProducts.slice(0, 5);
 
   const kpis = [
     {
@@ -1057,6 +1124,12 @@ function DashboardStats({
       label: "Pending Alterations",
       tab: "alterations",
       value: stats.pendingAlterations,
+    },
+    {
+      icon: Package,
+      label: "Low Stock",
+      tab: "products",
+      value: lowStockCount,
     },
     {
       icon: LayoutDashboard,
@@ -1258,6 +1331,42 @@ function DashboardStats({
           )}
         </div>
       </div>
+
+      {lowStockCount > 0 && (
+        <div className="p-6 rounded-xl border border-gold/10 bg-card space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg text-foreground">
+              Low Stock ({lowStockCount})
+            </h3>
+            <Button
+              variant="link"
+              size="sm"
+              className="text-gold text-xs"
+              onClick={() => onNavigateTab("products")}
+            >
+              View all
+            </Button>
+          </div>
+          <ul className="grid sm:grid-cols-2 gap-3">
+            {topLowStock.map((product: any) => (
+              <li
+                key={product.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-gold/10 px-3 py-2.5"
+              >
+                <p className="text-sm font-medium text-foreground truncate">
+                  {product.title}
+                </p>
+                <Badge
+                  variant="outline"
+                  className="shrink-0 text-xs font-mono border-gold/20 text-gold"
+                >
+                  {product.quantity ?? 0} left
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -2550,6 +2659,33 @@ function OrdersAdmin({
     "cancelled",
   ] as const;
 
+  const handleClaim = async (id: string) => {
+    try {
+      const result = await adminClaimOrder({ data: id });
+      if (result.warning) {
+        toast.warning(result.warning);
+      }
+      toast.success("Order claimed");
+      await queryClient.invalidateQueries({
+        queryKey: adminOrdersQueryOptions().queryKey,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Claim failed");
+    }
+  };
+
+  const handleUnclaim = async (id: string) => {
+    try {
+      await adminUnclaimOrder({ data: id });
+      toast.success("Order released");
+      await queryClient.invalidateQueries({
+        queryKey: adminOrdersQueryOptions().queryKey,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Release failed");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="font-display text-xl text-foreground pb-2 border-b border-gold/10">
@@ -2569,6 +2705,9 @@ function OrdersAdmin({
               </TableHead>
               <TableHead className="text-gold text-center">Status</TableHead>
               <TableHead className="text-gold">Order Date</TableHead>
+              <TableHead className="text-gold text-center">
+                Fulfillment
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -2612,6 +2751,32 @@ function OrdersAdmin({
                   {order.createdAt
                     ? new Date(order.createdAt).toLocaleDateString()
                     : ""}
+                </TableCell>
+                <TableCell className="text-center">
+                  {order.claimedBy ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="text-xs text-gold">
+                        {order.claimedByName ?? "Claimed"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleUnclaim(order.id)}
+                        className="text-[11px] text-muted-foreground hover:text-gold underline"
+                      >
+                        Release
+                      </button>
+                    </span>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      className="border-gold/20 text-gold hover:bg-gold/10 text-[11px]"
+                      onClick={() => handleClaim(order.id)}
+                    >
+                      Claim
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -2960,8 +3125,12 @@ function EventsAdmin({
                   onChange={(e) =>
                     setFormData({ ...formData, instructor: e.target.value })
                   }
+                  placeholder="Blank = whoever is on shift that day"
                   className="border-gold/10"
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Leave blank to auto-assign the staffer scheduled that day.
+                </p>
               </div>
             </div>
 
@@ -3096,6 +3265,33 @@ function AlterationsAdmin({
     "cancelled",
   ] as const;
 
+  const handleClaim = async (id: string) => {
+    try {
+      const result = await adminClaimAlteration({ data: id });
+      if (result.warning) {
+        toast.warning(result.warning);
+      }
+      toast.success("Ticket claimed");
+      await queryClient.invalidateQueries({
+        queryKey: adminAlterationsQueryOptions().queryKey,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Claim failed");
+    }
+  };
+
+  const handleUnclaim = async (id: string) => {
+    try {
+      await adminUnclaimAlteration({ data: id });
+      toast.success("Ticket released");
+      await queryClient.invalidateQueries({
+        queryKey: adminAlterationsQueryOptions().queryKey,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Release failed");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center pb-3 border-b border-gold/10">
@@ -3122,6 +3318,7 @@ function AlterationsAdmin({
                 Quoted Price
               </TableHead>
               <TableHead className="text-gold text-center">Status</TableHead>
+              <TableHead className="text-gold text-center">Tailor</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -3164,6 +3361,32 @@ function AlterationsAdmin({
                       </option>
                     ))}
                   </select>
+                </TableCell>
+                <TableCell className="text-center">
+                  {booking.assignedUserId ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="text-xs text-gold">
+                        {booking.assignedUserName ?? "Claimed"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleUnclaim(booking.id)}
+                        className="text-[11px] text-muted-foreground hover:text-gold underline"
+                      >
+                        Release
+                      </button>
+                    </span>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      className="border-gold/20 text-gold hover:bg-gold/10 text-[11px]"
+                      onClick={() => handleClaim(booking.id)}
+                    >
+                      Claim
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -3981,6 +4204,8 @@ function SettingsAdmin({
   const [businessName, setBusinessName] = useState(contact?.businessName || "");
   const [email, setEmail] = useState(contact?.email || "");
   const [shippoApiKey, setShippoApiKey] = useState("");
+  const [lowStockThreshold, setLowStockThreshold] = useState("");
+  const [thresholdLoaded, setThresholdLoaded] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: adminUpdateFooterContact,
@@ -4046,6 +4271,39 @@ function SettingsAdmin({
       return;
     }
     updateShippoMutation.mutate({ data: { apiKey: shippoApiKey } });
+  };
+
+  useEffect(() => {
+    if (thresholdLoaded) {
+      return;
+    }
+    setThresholdLoaded(true);
+    const load = async () => {
+      try {
+        const result = await adminGetLowStockThreshold();
+        setLowStockThreshold(String(result.threshold));
+      } catch {
+        setLowStockThreshold("5");
+      }
+    };
+    void load();
+  }, [thresholdLoaded]);
+
+  const handleSaveThreshold = async () => {
+    const parsed = Number.parseInt(lowStockThreshold, 10);
+    if (Number.isNaN(parsed) || parsed < 0) {
+      toast.error("Enter a threshold of 0 or more");
+      return;
+    }
+    try {
+      await adminUpdateLowStockThreshold({ data: { threshold: parsed } });
+      toast.success("Low-stock threshold saved");
+      await queryClient.invalidateQueries({
+        queryKey: adminStatsQueryOptions().queryKey,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Save failed");
+    }
   };
 
   return (
@@ -4167,6 +4425,36 @@ function SettingsAdmin({
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="max-w-2xl bg-card border border-gold/10 rounded-xl p-6 space-y-6">
+        <h3 className="font-display text-lg font-light text-gold flex items-center gap-2">
+          <Package className="h-5 w-5 text-gold" /> Inventory Alerts
+        </h3>
+
+        <div className="space-y-2">
+          <Label>Low-Stock Threshold</Label>
+          <Input
+            value={lowStockThreshold}
+            inputMode="numeric"
+            onChange={(e: any) =>
+              setLowStockThreshold(e.target.value.replaceAll(/\D/g, ""))
+            }
+            placeholder="5"
+            className="border-gold/10 font-mono"
+          />
+          <p className="text-xs text-muted-foreground">
+            Products at or below this quantity get a dashboard badge, and the
+            team is emailed the moment an order drops a product to this level.
+          </p>
+        </div>
+
+        <Button
+          className="bg-gold text-primary-foreground hover:bg-gold-dark"
+          onClick={handleSaveThreshold}
+        >
+          Save Threshold
+        </Button>
       </div>
     </div>
   );

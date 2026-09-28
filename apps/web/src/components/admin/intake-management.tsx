@@ -23,7 +23,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import {
+  adminGetIntakeRates,
+  adminMarkIntakeInTransit,
   adminMarkIntakeReceived,
+  adminPurchaseIntakeLabel,
   adminReviewIntake,
 } from "@/functions/intake";
 import { adminKeys } from "@/lib/queries";
@@ -39,6 +42,49 @@ const STATUSES = [
   "completed",
   "cancelled",
 ];
+
+function purchaseButtonLabel(isSaving: boolean, armed: boolean): string {
+  if (isSaving) {
+    return "Buying...";
+  }
+  if (armed) {
+    return "Confirm: spend real money";
+  }
+  return "Buy Label (Real Money)";
+}
+
+function parseShipFrom(value: string | null): {
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+} | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed === "object" && parsed !== null) {
+      const record = parsed as Record<string, unknown>;
+      if (
+        typeof record.address === "string" &&
+        typeof record.city === "string" &&
+        typeof record.state === "string" &&
+        typeof record.zip === "string"
+      ) {
+        return {
+          address: record.address,
+          city: record.city,
+          state: record.state,
+          zip: record.zip,
+        };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 function parseItems(items: string | null): any[] {
   if (!items) {
@@ -60,6 +106,10 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
   const [adminNotes, setAdminNotes] = useState("");
   const [appointmentAt, setAppointmentAt] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [rates, setRates] = useState<any[]>([]);
+  const [selectedRateId, setSelectedRateId] = useState("");
+  const [isLoadingRates, setIsLoadingRates] = useState(false);
+  const [purchaseArmed, setPurchaseArmed] = useState(false);
 
   const filtered =
     statusFilter === "all"
@@ -68,6 +118,9 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
 
   const openDetail = (intake: any) => {
     setSelected(intake);
+    setRates([]);
+    setSelectedRateId("");
+    setPurchaseArmed(false);
     setDecision("approved");
     setOfferAmount(
       typeof intake.offerAmount === "number" ? String(intake.offerAmount) : ""
@@ -127,6 +180,85 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
     }
   };
 
+  const handleGetRates = async () => {
+    if (!selected) {
+      return;
+    }
+    setIsLoadingRates(true);
+    try {
+      const result = await adminGetIntakeRates({
+        data: { intakeId: selected.id },
+      });
+      if (!result.success) {
+        toast.error(result.messages.join(", ") || "Address is invalid");
+        setRates([]);
+        setSelectedRateId("");
+        return;
+      }
+      setRates(result.rates);
+      setSelectedRateId(result.rates[0]?.objectId ?? "");
+      toast.success("Inbound rates updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Rates failed");
+    } finally {
+      setIsLoadingRates(false);
+    }
+  };
+
+  const handlePurchase = async () => {
+    if (!selected || !selectedRateId) {
+      return;
+    }
+    if (!purchaseArmed) {
+      setPurchaseArmed(true);
+      return;
+    }
+    const rate = rates.find((option) => option.objectId === selectedRateId);
+    setIsSaving(true);
+    try {
+      const result = await adminPurchaseIntakeLabel({
+        data: {
+          carrier: rate?.provider,
+          intakeId: selected.id,
+          rateObjectId: selectedRateId,
+        },
+      });
+      toast.success("Label purchased — customer emailed");
+      setPurchaseArmed(false);
+      setSelected({
+        ...selected,
+        inboundCarrier: rate?.provider ?? "USPS",
+        inboundLabelUrl: result.labelUrl,
+        inboundTrackingNumber: result.trackingNumber,
+        status: "label_sent",
+      });
+      setRates([]);
+      setSelectedRateId("");
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Purchase failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleInTransit = async () => {
+    if (!selected) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await adminMarkIntakeInTransit({ data: selected.id });
+      toast.success("Marked in transit");
+      setSelected({ ...selected, status: "in_transit" });
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Update failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-gold/10">
@@ -136,7 +268,7 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-9 rounded-md border border-gold/10 bg-background px-3 text-sm text-foreground"
+          className="h-9 rounded-xl border border-gold/10 bg-background px-3 text-sm text-foreground"
         >
           <option value="pending">Pending review</option>
           <option value="all">All statuses</option>
@@ -260,6 +392,91 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
                   </li>
                 ))}
               </ul>
+              {selected.type === "mailin" &&
+                (selected.status === "approved" ||
+                  selected.status === "label_sent") && (
+                  <div className="rounded-lg border border-gold/20 bg-gold/5 p-4 space-y-3">
+                    <p className="text-sm font-medium text-foreground">
+                      Inbound shipping label
+                    </p>
+                    {(() => {
+                      const shipFrom = parseShipFrom(selected.shipFromAddress);
+                      return shipFrom ? (
+                        <p className="text-xs text-muted-foreground">
+                          From: {shipFrom.address}, {shipFrom.city},{" "}
+                          {shipFrom.state} {shipFrom.zip}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-destructive">
+                          Customer ship-from address is missing.
+                        </p>
+                      );
+                    })()}
+                    {rates.length === 0 ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-gold/20 text-gold hover:bg-gold/10"
+                        disabled={isLoadingRates}
+                        onClick={handleGetRates}
+                      >
+                        {isLoadingRates
+                          ? "Checking rates..."
+                          : "Check Inbound Rates"}
+                      </Button>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          {rates.map((rate) => (
+                            <label
+                              key={rate.objectId}
+                              className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-sm cursor-pointer ${
+                                selectedRateId === rate.objectId
+                                  ? "border-gold bg-gold/5"
+                                  : "border-gold/10"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name="intake-rate"
+                                  checked={selectedRateId === rate.objectId}
+                                  onChange={() => {
+                                    setSelectedRateId(rate.objectId);
+                                    setPurchaseArmed(false);
+                                  }}
+                                  className="accent-[#d4af77]"
+                                />
+                                <span>
+                                  <span className="block font-medium text-foreground">
+                                    {rate.provider} {rate.servicelevel.name}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {rate.durationTerms ||
+                                      "Delivery estimate varies"}
+                                  </span>
+                                </span>
+                              </span>
+                              <span className="font-mono text-gold">
+                                ${Number(rate.amount).toFixed(2)}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-gold text-primary-foreground hover:bg-gold-dark"
+                          disabled={isSaving || !selectedRateId}
+                          onClick={handlePurchase}
+                        >
+                          {purchaseButtonLabel(isSaving, purchaseArmed)}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
               {selected.status === "pending" ? (
                 <>
                   <div className="grid grid-cols-2 gap-4">
@@ -270,7 +487,7 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
                         onChange={(e) =>
                           setDecision(e.target.value as "approved" | "declined")
                         }
-                        className="flex h-10 w-full rounded-md border border-gold/10 bg-background px-3 py-2 text-sm text-foreground"
+                        className="flex h-10 w-full rounded-xl border border-gold/10 bg-background px-3 py-2 text-sm text-foreground"
                       >
                         <option value="approved">Approve</option>
                         <option value="declined">Decline</option>
@@ -333,6 +550,9 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
                       >
                         View shipping label
                       </a>
+                      {selected.inboundTrackingNumber
+                        ? ` · ${selected.inboundCarrier ?? "USPS"} ${selected.inboundTrackingNumber}`
+                        : ""}
                     </p>
                   )}
                 </div>
@@ -352,13 +572,25 @@ export default function IntakeManagement({ intakes }: { intakes: any[] }) {
               ["approved", "label_sent", "in_transit"].includes(
                 selected?.status ?? ""
               ) && (
-                <Button
-                  className="bg-gold text-primary-foreground hover:bg-gold-dark"
-                  disabled={isSaving}
-                  onClick={handleReceived}
-                >
-                  {isSaving ? "Saving..." : "Mark Received"}
-                </Button>
+                <div className="flex gap-2">
+                  {selected?.status === "label_sent" && (
+                    <Button
+                      variant="outline"
+                      className="border-gold/20 text-gold hover:bg-gold/10"
+                      disabled={isSaving}
+                      onClick={handleInTransit}
+                    >
+                      {isSaving ? "Saving..." : "Mark In Transit"}
+                    </Button>
+                  )}
+                  <Button
+                    className="bg-gold text-primary-foreground hover:bg-gold-dark"
+                    disabled={isSaving}
+                    onClick={handleReceived}
+                  >
+                    {isSaving ? "Saving..." : "Mark Received"}
+                  </Button>
+                </div>
               )
             )}
           </DialogFooter>

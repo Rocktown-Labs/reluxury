@@ -19,6 +19,9 @@ import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 
 import { notifyAdmin } from "@/lib/admin-notify";
+import { requireDb } from "@/lib/db";
+import type { AppDb } from "@/lib/db";
+import { isNewlyLowStock, readLowStockThreshold } from "@/lib/inventory";
 import {
   normalizePhoneToMasked,
   optionalFlexiblePhoneSchema,
@@ -76,10 +79,11 @@ const DEFAULT_PACKAGE_DIMENSIONS = {
 const DEFAULT_ITEM_WEIGHT_OZ = 16;
 
 async function getCheckoutCart(
-  db: ReturnType<typeof createDb>,
+  db: AppDb | ReturnType<typeof createDb>,
   userId: string | null,
   guestItems?: z.infer<typeof orderInputSchema>["guestItems"]
 ) {
+  const database: AppDb = db as AppDb;
   const cart: {
     productId: string;
     quantity: number;
@@ -88,7 +92,7 @@ async function getCheckoutCart(
   }[] = [];
 
   if (userId) {
-    const dbCart = await db.query.cartItems.findMany({
+    const dbCart = await database.query.cartItems.findMany({
       where: eq(cartItems.userId, userId),
       with: { product: true },
     });
@@ -105,7 +109,7 @@ async function getCheckoutCart(
   }
 
   for (const guestItem of guestItems) {
-    const product = await db.query.products.findFirst({
+    const product = await database.query.products.findFirst({
       where: and(
         eq(products.id, guestItem.productId),
         eq(products.isActive, true)
@@ -181,7 +185,7 @@ export const createOrder = createServerFn({ method: "POST" })
   .inputValidator(orderInputSchema)
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    const db = createDb();
+    const db = requireDb(createDb());
     const userId = context.session?.user.id ?? null;
 
     const cart = await getCheckoutCart(db, userId, data.guestItems);
@@ -212,6 +216,7 @@ export const createOrder = createServerFn({ method: "POST" })
 
     const orderNumber = `RLX-${Date.now().toString(36).toUpperCase()}`;
     const orderId = crypto.randomUUID();
+    const lowStockAlerts: { quantity: number; title: string }[] = [];
 
     await db.insert(orders).values({
       carrier: data.selectedShippingRate?.provider ?? null,
@@ -251,10 +256,23 @@ export const createOrder = createServerFn({ method: "POST" })
         title: item.product.title,
       });
 
+      const remaining = item.product.quantity - item.quantity;
       await db
         .update(products)
-        .set({ quantity: item.product.quantity - item.quantity })
+        .set({ quantity: remaining })
         .where(eq(products.id, item.productId));
+      if (
+        isNewlyLowStock(
+          item.product.quantity,
+          remaining,
+          await readLowStockThreshold(db)
+        )
+      ) {
+        lowStockAlerts.push({
+          quantity: remaining,
+          title: item.product.title,
+        });
+      }
 
       // If it is a workshop product, automatically register the user for it
       if (item.product.categoryId === "cat-workshops" && userId) {
@@ -294,7 +312,7 @@ export const createOrder = createServerFn({ method: "POST" })
         quantity: item.quantity,
         title: item.product.title,
       }));
-      const business = await readBusinessContact(db);
+      const business = await readBusinessContact();
       await sendViaResend({
         apiKey: env.RESEND_API_KEY ?? "",
         from: EMAIL_FROM.orders,
@@ -336,6 +354,13 @@ export const createOrder = createServerFn({ method: "POST" })
       `New order ${orderNumber} — $${total.toFixed(2)}`,
       `<div style="font-family:sans-serif"><h2>New order ${orderNumber}</h2><p>${data.name} (${data.email}) placed a ${data.deliveryMethod} order totaling $${total.toFixed(2)}.</p><p>${itemsForEmail.map((i) => `${i.quantity} × ${i.title}`).join("<br/>")}</p></div>`
     );
+
+    if (lowStockAlerts.length > 0) {
+      await notifyAdmin(
+        `Low stock alert — ${lowStockAlerts.length} product(s)`,
+        `<div style="font-family:sans-serif"><h2>Low stock after order ${orderNumber}</h2><p>${lowStockAlerts.map((alert) => `${alert.title}: ${alert.quantity} left`).join("<br/>")}</p></div>`
+      );
+    }
 
     return { orderId, orderNumber };
   });
