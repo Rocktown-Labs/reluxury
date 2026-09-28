@@ -4,6 +4,7 @@ import { env } from "@reluxury/env/server";
 import {
   EMAIL_FROM,
   intakeDecisionHtml,
+  intakeLabelReadyHtml,
   intakeOfferResponseHtml,
   intakeReceivedHtml,
   intakeSubmittedHtml,
@@ -14,11 +15,18 @@ import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 
 import { notifyAdmin } from "@/lib/admin-notify";
+import { auditAction } from "@/lib/audit";
+import {
+  parseShipFromAddress,
+  toInboundShippoAddresses,
+} from "@/lib/boutique-address";
+import { requireDb } from "@/lib/db";
 import {
   normalizePhoneToMasked,
   optionalFlexiblePhoneSchema,
 } from "@/lib/phone";
 import { requireStaffPermission } from "@/lib/staff-auth";
+import { shippo } from "@/lib/shippo";
 import { authMiddleware } from "@/middleware/auth";
 
 const INTAKE_IMAGE_MIME_TYPES = new Set([
@@ -302,12 +310,21 @@ export const adminReviewIntake = createServerFn({ method: "POST" })
       })
       .where(eq(intakeSubmissions.id, data.id));
     const business = await readBusinessContact(db);
+    const appointmentDate = data.appointmentAt
+      ? new Date(data.appointmentAt)
+      : submission.appointmentAt;
     try {
       await sendViaResend({
         apiKey: env.RESEND_API_KEY ?? "",
         from: EMAIL_FROM.intake,
         html: intakeDecisionHtml({
           adminNote: data.adminNotes,
+          appointmentLabel:
+            data.decision === "approved" &&
+            submission.type === "dropoff" &&
+            appointmentDate
+              ? new Date(appointmentDate).toLocaleString()
+              : undefined,
           business,
           customerName: submission.contactName,
           decision: data.decision,
@@ -325,12 +342,159 @@ export const adminReviewIntake = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+const INBOUND_PARCEL = {
+  height: 4,
+  length: 14,
+  weight: 16,
+  width: 10,
+} as const;
+
+export const adminGetIntakeRates = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ intakeId: z.string() }))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireStaffPermission(context, "intake.manage");
+    const db = requireDb(createDb());
+    const submission = await db.query.intakeSubmissions.findFirst({
+      where: eq(intakeSubmissions.id, data.intakeId),
+    });
+    if (!submission) {
+      throw new Error("Submission not found");
+    }
+    if (submission.type !== "mailin") {
+      throw new Error("Only mail-in submissions need a shipping label");
+    }
+    if (submission.status !== "approved" && submission.status !== "label_sent") {
+      throw new Error("Approve the submission before buying a label");
+    }
+    const shipFrom = submission.shipFromAddress
+      ? parseShipFromAddress(submission.shipFromAddress)
+      : null;
+    if (!shipFrom) {
+      throw new Error("Customer ship-from address is missing");
+    }
+    const business = await readBusinessContact();
+    const { recipient, sender } = toInboundShippoAddresses({
+      boutique: business,
+      contactEmail: submission.contactEmail,
+      contactName: submission.contactName,
+      phone: submission.phone,
+      shipFrom,
+    });
+    const validation = await shippo.validateAddress(sender);
+    if (!validation.isValid) {
+      return {
+        messages: validation.messages,
+        rates: [],
+        success: false as const,
+      };
+    }
+    const rates = await shippo.getRates(recipient, { ...INBOUND_PARCEL }, sender);
+    return { messages: [], rates, success: true as const };
+  });
+
+export const adminPurchaseIntakeLabel = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      carrier: z.string().optional(),
+      intakeId: z.string(),
+      rateObjectId: z.string(),
+    })
+  )
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireStaffPermission(context, "intake.manage");
+    const db = requireDb(createDb());
+    const submission = await db.query.intakeSubmissions.findFirst({
+      where: eq(intakeSubmissions.id, data.intakeId),
+    });
+    if (!submission) {
+      throw new Error("Submission not found");
+    }
+    if (submission.type !== "mailin") {
+      throw new Error("Only mail-in submissions need a shipping label");
+    }
+    if (submission.status !== "approved" && submission.status !== "label_sent") {
+      throw new Error("Approve the submission before buying a label");
+    }
+    const transaction = await shippo.purchaseLabel(data.rateObjectId);
+    if (transaction.status !== "SUCCESS") {
+      throw new Error(
+        transaction.messages.join(", ") || "Label purchase failed"
+      );
+    }
+    await db
+      .update(intakeSubmissions)
+      .set({
+        inboundCarrier: data.carrier ?? "USPS",
+        inboundLabelUrl: transaction.labelUrl,
+        inboundTrackingNumber: transaction.trackingNumber,
+        status: "label_sent",
+      })
+      .where(eq(intakeSubmissions.id, data.intakeId));
+    await auditAction({
+      action: "intake.label_purchased",
+      actorUserId: context.session?.user.id,
+      details: {
+        carrier: data.carrier ?? "USPS",
+        trackingNumber: transaction.trackingNumber,
+      },
+      entityId: data.intakeId,
+      entityType: "intake_submission",
+    });
+    const business = await readBusinessContact();
+    try {
+      await sendViaResend({
+        apiKey: env.RESEND_API_KEY ?? "",
+        from: EMAIL_FROM.intake,
+        html: intakeLabelReadyHtml({
+          business,
+          carrier: data.carrier ?? "USPS",
+          customerName: submission.contactName,
+          labelUrl: transaction.labelUrl,
+          trackingNumber: transaction.trackingNumber,
+        }),
+        subject: "Your ReLUXURY shipping label is ready",
+        to: submission.contactEmail,
+      });
+    } catch (error) {
+      console.error("Intake label email failed", error);
+    }
+    return {
+      labelUrl: transaction.labelUrl,
+      success: true,
+      trackingNumber: transaction.trackingNumber,
+    };
+  });
+
+export const adminMarkIntakeInTransit = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireStaffPermission(context, "intake.manage");
+    const db = requireDb(createDb());
+    const submission = await db.query.intakeSubmissions.findFirst({
+      where: eq(intakeSubmissions.id, id),
+    });
+    if (!submission) {
+      throw new Error("Submission not found");
+    }
+    if (submission.status !== "label_sent") {
+      throw new Error("Purchase a shipping label first");
+    }
+    await db
+      .update(intakeSubmissions)
+      .set({ status: "in_transit" })
+      .where(eq(intakeSubmissions.id, id));
+    return { success: true };
+  });
+
 export const adminMarkIntakeReceived = createServerFn({ method: "POST" })
   .inputValidator(z.string())
   .middleware([authMiddleware])
   .handler(async ({ context, data: id }) => {
     requireStaffPermission(context, "intake.manage");
-    const db = createDb();
+    const db = requireDb(createDb());
     const submission = await db.query.intakeSubmissions.findFirst({
       where: eq(intakeSubmissions.id, id),
     });
@@ -341,7 +505,7 @@ export const adminMarkIntakeReceived = createServerFn({ method: "POST" })
       .update(intakeSubmissions)
       .set({ status: "received" })
       .where(eq(intakeSubmissions.id, id));
-    const business = await readBusinessContact(db);
+    const business = await readBusinessContact();
     try {
       await sendViaResend({
         apiKey: env.RESEND_API_KEY ?? "",

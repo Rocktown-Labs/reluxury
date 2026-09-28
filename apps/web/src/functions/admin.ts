@@ -9,6 +9,7 @@ import {
   promotions,
   user,
   storeSettings,
+  shifts,
   categories,
   cartItems,
 } from "@reluxury/db/schema";
@@ -34,8 +35,16 @@ import {
 import { z } from "zod";
 
 import { auditAction } from "@/lib/audit";
+import { requireDb } from "@/lib/db";
+import type { AppDb } from "@/lib/db";
+import {
+  LOW_STOCK_THRESHOLD_KEY,
+  readLowStockThreshold,
+} from "@/lib/inventory";
 import { shippo } from "@/lib/shippo";
-import { requireStaffPermission } from "@/lib/staff-auth";
+import { shiftCoversCentralDay } from "@/lib/shifts";
+import { offShiftWarning } from "@/lib/shift-warnings";
+import { isFullAccess, requireStaffPermission } from "@/lib/staff-auth";
 import { authMiddleware } from "@/middleware/auth";
 
 import { WORKSHOP_PRODUCT_CATEGORY_ID } from "./store";
@@ -578,10 +587,14 @@ export const adminCreateEvent = createServerFn({ method: "POST" })
     requireStaffPermission(context, "workshops.manage");
     const db = createDb();
     const id = crypto.randomUUID();
+    const instructor =
+      data.instructor?.trim() ||
+      (await defaultEventInstructor(db, new Date(data.startDate)));
     await db.insert(events).values({
       id,
       ...data,
       endDate: data.endDate ? new Date(data.endDate) : null,
+      instructor: instructor ?? undefined,
       isActive: true,
     });
     const event = await db.query.events.findFirst({
@@ -629,6 +642,24 @@ export const adminUpdateEvent = createServerFn({ method: "POST" })
         ? new Date(updateData.startDate)
         : undefined,
     };
+    const instructorEmpty =
+      update.instructor === null ||
+      update.instructor === undefined ||
+      update.instructor.trim() === "";
+    if (instructorEmpty) {
+      let startForDefault: Date | null = update.startDate ?? null;
+      if (!startForDefault) {
+        const existing = await db.query.events.findFirst({
+          where: eq(events.id, id),
+        });
+        startForDefault = existing?.startDate ?? null;
+      }
+      if (startForDefault) {
+        update.instructor =
+          (await defaultEventInstructor(db, new Date(startForDefault))) ??
+          update.instructor;
+      }
+    }
     await db.update(events).set(update).where(eq(events.id, id));
     const event = await db.query.events.findFirst({
       where: eq(events.id, id),
@@ -729,6 +760,177 @@ export const adminUpdateAlteration = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+async function defaultEventInstructor(
+  db: ReturnType<typeof createDb>,
+  startDate: Date
+): Promise<string | null> {
+  if (!db) {
+    return null;
+  }
+  const database: AppDb = db as AppDb;
+  const nearby = await database.query.shifts.findMany({
+    where: and(
+      gte(shifts.startAt, new Date(startDate.getTime() - 24 * 60 * 60 * 1000)),
+      eq(shifts.status, "scheduled")
+    ),
+    with: { staff: { with: { user: true } } },
+  });
+  let earliest: (typeof nearby)[number] | null = null;
+  for (const shift of nearby) {
+    if (!shiftCoversCentralDay(shift, startDate)) {
+      continue;
+    }
+    const name = shift.staff?.alias || shift.staff?.user?.name;
+    if (!name) {
+      continue;
+    }
+    if (!earliest || +new Date(shift.startAt) < +new Date(earliest.startAt)) {
+      earliest = shift;
+    }
+  }
+  if (!earliest?.staff) {
+    return null;
+  }
+  return earliest.staff.alias || earliest.staff.user?.name || null;
+}
+
+export const adminClaimOrder = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireStaffPermission(context, "orders.manage");
+    const db = requireDb(createDb());
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, id),
+    });
+    if (!order) {
+      throw new Error("Order not found");
+    }
+    if (order.claimedBy && order.claimedBy !== context.session?.user.id) {
+      throw new Error(
+        `Already claimed by ${order.claimedByName ?? "another team member"}`
+      );
+    }
+    const name = context.session?.user.name ?? "Team member";
+    await db
+      .update(orders)
+      .set({ claimedBy: context.session?.user.id ?? null, claimedByName: name })
+      .where(eq(orders.id, id));
+    await auditAction({
+      action: "order.claimed",
+      actorUserId: context.session?.user.id,
+      entityId: id,
+      entityType: "order",
+    });
+    const warning = await offShiftWarning(db, {
+      isFull: isFullAccess(context.session),
+      userId: context.session?.user.id ?? "",
+    });
+    return { success: true, warning };
+  });
+
+export const adminUnclaimOrder = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireStaffPermission(context, "orders.manage");
+    const db = requireDb(createDb());
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, id),
+    });
+    if (!order) {
+      throw new Error("Order not found");
+    }
+    if (
+      order.claimedBy &&
+      order.claimedBy !== context.session?.user.id &&
+      !isFullAccess(context.session)
+    ) {
+      throw new Error("Only the claimer or an admin can release this order");
+    }
+    await db
+      .update(orders)
+      .set({ claimedBy: null, claimedByName: null })
+      .where(eq(orders.id, id));
+    await auditAction({
+      action: "order.unclaimed",
+      actorUserId: context.session?.user.id,
+      entityId: id,
+      entityType: "order",
+    });
+    return { success: true };
+  });
+
+export const adminClaimAlteration = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireStaffPermission(context, "alterations.manage");
+    const db = requireDb(createDb());
+    const booking = await db.query.alterationBookings.findFirst({
+      where: eq(alterationBookings.id, id),
+    });
+    if (!booking) {
+      throw new Error("Booking not found");
+    }
+    if (
+      booking.assignedUserId &&
+      booking.assignedUserId !== context.session?.user.id
+    ) {
+      throw new Error(
+        `Already claimed by ${booking.assignedUserName ?? "another tailor"}`
+      );
+    }
+    const name = context.session?.user.name ?? "Team member";
+    await db
+      .update(alterationBookings)
+      .set({ assignedUserId: context.session?.user.id ?? null, assignedUserName: name })
+      .where(eq(alterationBookings.id, id));
+    await auditAction({
+      action: "alteration.claimed",
+      actorUserId: context.session?.user.id,
+      entityId: id,
+      entityType: "alteration",
+    });
+    const warning = await offShiftWarning(db, {
+      isFull: isFullAccess(context.session),
+      userId: context.session?.user.id ?? "",
+    });
+    return { success: true, warning };
+  });
+
+export const adminUnclaimAlteration = createServerFn({ method: "POST" })
+  .inputValidator(z.string())
+  .middleware([authMiddleware])
+  .handler(async ({ context, data: id }) => {
+    requireStaffPermission(context, "alterations.manage");
+    const db = requireDb(createDb());
+    const booking = await db.query.alterationBookings.findFirst({
+      where: eq(alterationBookings.id, id),
+    });
+    if (!booking) {
+      throw new Error("Booking not found");
+    }
+    if (
+      booking.assignedUserId &&
+      booking.assignedUserId !== context.session?.user.id &&
+      !isFullAccess(context.session)
+    ) {
+      throw new Error("Only the claimer or an admin can release this booking");
+    }
+    await db
+      .update(alterationBookings)
+      .set({ assignedUserId: null, assignedUserName: null })
+      .where(eq(alterationBookings.id, id));
+    await auditAction({
+      action: "alteration.unclaimed",
+      actorUserId: context.session?.user.id,
+      entityId: id,
+      entityType: "alteration",
+    });
+    return { success: true };
+  });
+
 // Promotions Admin
 export const adminGetPromotions = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -810,6 +1012,7 @@ export const adminGetStats = createServerFn({ method: "GET" })
       pendingOrders,
       pendingAlterations,
       abandonedCartRows,
+      lowStockThreshold,
     ] = await Promise.all([
       db.select({ count: count() }).from(orders),
       db
@@ -838,12 +1041,14 @@ export const adminGetStats = createServerFn({ method: "GET" })
         })
         .from(cartItems)
         .innerJoin(products, eq(cartItems.productId, products.id)),
+      readLowStockThreshold(db),
     ]);
 
     return {
       abandonedCartValue: abandonedCartRows[0]?.total ?? 0,
       abandonedCarts: abandonedCartRows[0]?.count ?? 0,
       activeEvents: eventCount[0]?.count ?? 0,
+      lowStockThreshold,
       pendingAlterations: pendingAlterations[0]?.count ?? 0,
       pendingOrders: pendingOrders[0]?.count ?? 0,
       totalOrders: orderCount[0]?.count ?? 0,
@@ -1153,6 +1358,39 @@ export const adminClearShippoApiKey = createServerFn({ method: "POST" })
       .delete(storeSettings)
       .where(eq(storeSettings.key, SHIPPO_API_KEY_SETTING));
     return { success: true };
+  });
+
+export const adminGetLowStockThreshold = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    requireStaffPermission(context, "dashboard.view");
+    const db = requireDb(createDb());
+    return { threshold: await readLowStockThreshold(db) };
+  });
+
+export const adminUpdateLowStockThreshold = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ threshold: z.number().int().min(0).max(1000) }))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    requireStaffPermission(context, "settings.manage");
+    const db = requireDb(createDb());
+    const value = String(data.threshold);
+    const existing = await db.query.storeSettings.findFirst({
+      where: eq(storeSettings.key, LOW_STOCK_THRESHOLD_KEY),
+    });
+    if (existing) {
+      await db
+        .update(storeSettings)
+        .set({ value })
+        .where(eq(storeSettings.key, LOW_STOCK_THRESHOLD_KEY));
+    } else {
+      await db.insert(storeSettings).values({
+        id: crypto.randomUUID(),
+        key: LOW_STOCK_THRESHOLD_KEY,
+        value,
+      });
+    }
+    return { success: true, threshold: data.threshold };
   });
 
 export const adminCreateCategory = createServerFn({ method: "POST" })

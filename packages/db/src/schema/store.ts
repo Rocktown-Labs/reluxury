@@ -117,6 +117,10 @@ export const orders = sqliteTable(
   {
     adminNotes: text("admin_notes"),
     carrier: text("carrier"),
+    claimedBy: text("claimed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    claimedByName: text("claimed_by_name"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -333,6 +337,7 @@ export const alterationBookings = sqliteTable(
     assignedUserId: text("assigned_user_id").references(() => user.id, {
       onDelete: "set null",
     }),
+    assignedUserName: text("assigned_user_name"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),

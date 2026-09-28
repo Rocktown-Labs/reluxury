@@ -128,7 +128,9 @@ export const intakeSubmissions = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     id: text("id").primaryKey(),
+    inboundCarrier: text("inbound_carrier"),
     inboundLabelUrl: text("inbound_label_url"),
+    inboundTrackingNumber: text("inbound_tracking_number"),
     items: text("items").notNull().default("[]"),
     offerAmount: real("offer_amount"),
     offerStatus: text("offer_status", {

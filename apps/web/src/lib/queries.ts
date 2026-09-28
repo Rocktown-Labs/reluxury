@@ -20,7 +20,9 @@ import { adminGetIntakes, getMyIntakes } from "@/functions/intake";
 import {
   adminGetAuditLog,
   adminGetMyStaffContext,
+  adminGetShifts,
   adminGetStaffList,
+  getMyShifts,
 } from "@/functions/staff";
 import {
   getCategories,
@@ -45,6 +47,7 @@ export const storeKeys = {
   featured: () => [...storeKeys.all, "featured"] as const,
   footerContact: () => [...storeKeys.all, "footerContact"] as const,
   myIntakes: () => [...storeKeys.all, "myIntakes"] as const,
+  myShifts: () => [...storeKeys.all, "myShifts"] as const,
   newArrivals: () => [...storeKeys.all, "newArrivals"] as const,
   product: (slug: string) => [...storeKeys.all, "product", slug] as const,
   products: (filters: Record<string, unknown>) =>
@@ -67,6 +70,7 @@ export const adminKeys = {
   orders: () => [...adminKeys.all, "orders"] as const,
   products: () => [...adminKeys.all, "products"] as const,
   promotions: () => [...adminKeys.all, "promotions"] as const,
+  shifts: () => [...adminKeys.all, "shifts"] as const,
   shippoSettings: () => [...adminKeys.all, "shippoSettings"] as const,
   staff: () => [...adminKeys.all, "staff"] as const,
   staffAudit: () => [...adminKeys.all, "audit"] as const,
@@ -260,6 +264,18 @@ export const adminStaffMeQueryOptions = () =>
   queryOptions({
     queryFn: () => adminGetMyStaffContext(),
     queryKey: adminKeys.staffMe(),
+  });
+
+export const adminShiftsQueryOptions = () =>
+  queryOptions({
+    queryFn: () => adminGetShifts(),
+    queryKey: adminKeys.shifts(),
+  });
+
+export const myShiftsQueryOptions = () =>
+  queryOptions({
+    queryFn: () => getMyShifts(),
+    queryKey: storeKeys.myShifts(),
   });
 
 export const adminAuditLogQueryOptions = () =>

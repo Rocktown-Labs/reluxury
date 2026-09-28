@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   intakeDecisionHtml,
+  intakeLabelReadyHtml,
   intakeOfferResponseHtml,
   intakeReceivedHtml,
   intakeSubmittedHtml,
+  shiftReminderHtml,
 } from "@reluxury/transactional";
 
 describe("intake email builders", () => {
@@ -63,5 +65,39 @@ describe("intake email builders", () => {
     expect(html).toContain("arrived safely");
     expect(html).toContain("1 Test St, Testville");
     expect(html).toContain("(555) 000-0000");
+  });
+
+  it("renders the drop-off appointment in approval emails", () => {
+    const html = intakeDecisionHtml({
+      appointmentLabel: "9/30/2026, 10:00:00 AM",
+      customerName: "Ava",
+      decision: "approved",
+    });
+    expect(html).toContain("drop-off appointment");
+    expect(html).toContain("9/30/2026");
+  });
+
+  it("renders the prepaid label link and tracking", () => {
+    const html = intakeLabelReadyHtml({
+      carrier: "USPS",
+      customerName: "Ava",
+      labelUrl: "https://example.com/label.pdf",
+      trackingNumber: "9400111899560000000000",
+    });
+    expect(html).toContain("https://example.com/label.pdf");
+    expect(html).toContain("9400111899560000000000");
+    expect(html).toContain("USPS");
+  });
+
+  it("reminds staff of today's shift", () => {
+    const html = shiftReminderHtml({
+      endAt: "6:00 PM",
+      position: "Register",
+      staffName: "Jo",
+      startAt: "10:00 AM",
+    });
+    expect(html).toContain("Jo");
+    expect(html).toContain("10:00 AM");
+    expect(html).toContain("Register");
   });
 });
