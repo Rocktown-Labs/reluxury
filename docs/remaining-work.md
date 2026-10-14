@@ -3,38 +3,8 @@
 Shipped to prod (`master`): boutique storefront, admin dashboard, staff RBAC (#2/#3/#4),
 consignment intake loop (#5/#6), checkout + Shippo outbound rates, workshops, alterations
 booking, auth (email/password + Google, Turnstile on email forms), Radar address
-verification, intake emails on `intake@mail.reluxury.shop`.
-
-## P3 — Mail-in Shippo inbound labels + drop-off appointments (issue #7)
-
-The intake record already carries `shipFromAddress`, `appointmentAt`, `inboundLabelUrl`,
-and statuses (`label_sent`, `in_transit`, `received`). What's missing is the label flow:
-
-- [ ] Admin confirms the customer's ship-from address, fetches inbound rates, and
-      purchases the label behind a deliberate click (real money) — reuse the
-      `shippo` client in `apps/web/src/lib/shippo.ts` (`getRates` + `purchaseLabel`
-      already exist for outbound).
-- [ ] Store the label URL on `inboundLabelUrl`, flip status to `label_sent`.
-- [ ] Label-ready email to the customer with the label link (new builder in
-      `packages/transactional/src/send.ts`, sender `EMAIL_FROM.intake`).
-- [ ] In-transit → received transitions in the admin Intake tab; drop-off
-      appointment slot confirmed on approve.
-- [ ] Secrets: Shippo key already wired (`SHIPPO_API_KEY` binding / DB setting).
-
-## P4 — Shifts, claim queues, low-stock alerts (issue #8)
-
-Schema tables (`shifts`, `staff_members`) exist from the RBAC migration; no UI yet:
-
-- [ ] `shifts` week view in admin (reuse `calendar-admin` patterns) + per-role
-      my-schedule view.
-- [ ] Morning-of shift reminder emails (same Resend path as other mail).
-- [ ] Off-shift assignment warnings (display only, no hard blocks); default the
-      workshop instructor from scheduled staff.
-- [ ] Claim queues: tailors claim alterations, fulfillment staff claim orders
-      (new `claimedBy` ownership or a lightweight claims table + permission checks
-      via the existing `requireStaffPermission` pattern).
-- [ ] Low-stock alerts into the existing badge system (threshold → dashboard badge
-      + admin email).
+verification, intake emails on `intake@mail.reluxury.shop`, P3 inbound Shippo labels +
+drop-off appointments (#7), and P4 shifts/claims/low-stock alerts (#8).
 
 ## Verify on prod (post-ship checklist)
 
